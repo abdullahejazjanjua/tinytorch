@@ -72,69 +72,67 @@ __global__ void conv2d_kernelv2(float *in,
 
     __shared__ float IN_DATA_CHUNK[BLOCK_SIZE][BLOCK_SIZE];
 
+    for (int bs = 0; bs < batch_size; bs++)
     {
-        for (int bs = 0; bs < batch_size; bs++)
+        float val = 0.0f;
+        for (int c = 0; c < num_channels; c++)
         {
-            float val = 0.0f;
-            for (int c = 0; c < num_channels; c++)
-            {
-                if (row < h_in && col < w_in)
-                    IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = in[
-                                                            bs * (num_channels * h_in * w_in) + 
-                                                            c * (h_in * w_in)                 + 
-                                                            row * (w_in)                      + 
-                                                            col
-                                                     ];
-                else
-                    IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = 0.0f;
-                __syncthreads();
-
-                if (filter_k < num_filters && row < h_out && col < w_out)
-                {
-                    for (int f_i = 0; f_i < filter_size; f_i++)
-                    {
-                        for (int f_j = 0; f_j < filter_size; f_j++)
-                        {
-                            if ((threadIdx.y + f_i - pad_h) >= 0 && (threadIdx.y + f_i - pad_h) < BLOCK_SIZE
-                                                            &&
-                                (threadIdx.x + f_j - pad_w) >= 0 && (threadIdx.x + f_j - pad_w) < BLOCK_SIZE)
-                                {
-                                    val += IN_DATA_CHUNK[threadIdx.y + f_i - pad_h][threadIdx.x + f_j - pad_w] *
-                                            filter[
-                                                filter_k * (num_channels * filter_size * filter_size) + 
-                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
-                                                f_j
-                                            ];
-                                }
-                            else if ((row + f_i - pad_h) >= 0 && (row + f_i - pad_h) < h_in 
-                                                            &&
-                                    (col + f_j - pad_w) >= 0 && (col + f_j - pad_w) < w_in)
-                                {
-                                    int row_hat = row + f_i - pad_h;
-                                    int col_hat = col + f_j - pad_w;
-                                    // bring that fker from cache (hopefully :D)
-                                    val += in[
-                                                bs * (num_channels * h_in * w_in) + 
-                                                c * (h_in * w_in)                 + 
-                                                row_hat * (w_in)                  + 
-                                                col_hat
-                                            ] *
-                                            filter[
-                                                filter_k * (num_channels * filter_size * filter_size) + 
-                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
-                                                f_j
-                                            ];
-                                }
-                        }
-                    }
-                }
-                __syncthreads();
-            }
+            if (row < h_in && col < w_in)
+                IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = in[
+                                                        bs * (num_channels * h_in * w_in) + 
+                                                        c * (h_in * w_in)                 + 
+                                                        row * (w_in)                      + 
+                                                        col
+                                                    ];
+            else
+                IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = 0.0f;
+            __syncthreads();
 
             if (filter_k < num_filters && row < h_out && col < w_out)
-                out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
-
+            {
+                for (int f_i = 0; f_i < filter_size; f_i++)
+                {
+                    for (int f_j = 0; f_j < filter_size; f_j++)
+                    {
+                        if ((threadIdx.y + f_i - pad_h) >= 0 && (threadIdx.y + f_i - pad_h) < BLOCK_SIZE
+                                                        &&
+                            (threadIdx.x + f_j - pad_w) >= 0 && (threadIdx.x + f_j - pad_w) < BLOCK_SIZE)
+                            {
+                                val += IN_DATA_CHUNK[threadIdx.y + f_i - pad_h][threadIdx.x + f_j - pad_w] *
+                                        filter[
+                                            filter_k * (num_channels * filter_size * filter_size) + 
+                                            c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                            f_j
+                                        ];
+                            }
+                        else if ((row + f_i - pad_h) >= 0 && (row + f_i - pad_h) < h_in 
+                                                        &&
+                                (col + f_j - pad_w) >= 0 && (col + f_j - pad_w) < w_in)
+                            {
+                                int row_hat = row + f_i - pad_h;
+                                int col_hat = col + f_j - pad_w;
+                                // bring that fker from cache (hopefully :D)
+                                val += in[
+                                            bs * (num_channels * h_in * w_in) + 
+                                            c * (h_in * w_in)                 + 
+                                            row_hat * (w_in)                  + 
+                                            col_hat
+                                        ] *
+                                        filter[
+                                            filter_k * (num_channels * filter_size * filter_size) + 
+                                            c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                            f_j
+                                        ];
+                            }
+                    }
+                }
+            }
+            __syncthreads();
         }
+
+        if (filter_k < num_filters && row < h_out && col < w_out)
+            out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
+
     }
 }
 
@@ -156,62 +154,60 @@ __global__ void conv2d_kernelv3(float *in,
     int IN_DIM = BLOCK_SIZE + 3 - 1;
     __shared__ float IN_DATA_CHUNK[IN_DIM][IN_DIM];
 
+    for (int bs = 0; bs < batch_size; bs++)
     {
-        for (int bs = 0; bs < batch_size; bs++)
+        float val = 0.0f;
+        for (int c = 0; c < num_channels; c++)
         {
-            float val = 0.0f;
-            for (int c = 0; c < num_channels; c++)
+            // flattened thread_id -> (elements_to_load: num_threads)
+            for (int i = (threadIdx.y * blockDim.x + threadIdx.x); i < (IN_DIM * IN_DIM); i += (blockDim.x * blockDim.y))
             {
-                // flattened thread_id -> (elements_to_load: num_threads)
-                for (int i = (threadIdx.y * blockDim.x + threadIdx.x); i < (IN_DIM * IN_DIM); i += (blockDim.x * blockDim.y))
-                {
-                    /*
-                        We flattened our input data and threads, and map the block onto input data to contagiously
-                        load num_threads elements, in this case there is control diveregence at the 2 edges.
-                        If we used 2D nested loop, then there would be control divergence at each boundary.
-                    */
+                /*
+                    We flattened our input data and threads, and map the block onto input data to contagiously
+                    load num_threads elements, in this case there is control diveregence at the 2 edges.
+                    If we used 2D nested loop, then there would be control divergence at each boundary.
+                */
 
-                    // compute the 2D index
-                    int load_y = i / IN_DIM;
-                    int load_x = i % IN_DIM;
-                    
-                    // offset into the block using load_y & load_x and shift by pad_h & pad_w to handle padding.
-                    int row_hat = (blockIdx.y * blockDim.y) + load_y - pad_h;
-                    int col_hat = (blockIdx.x * blockDim.x) + load_x - pad_w;
+                // compute the 2D index
+                int load_y = i / IN_DIM;
+                int load_x = i % IN_DIM;
+                
+                // offset into the block using load_y & load_x and shift by pad_h & pad_w to handle padding.
+                int row_hat = (blockIdx.y * blockDim.y) + load_y - pad_h;
+                int col_hat = (blockIdx.x * blockDim.x) + load_x - pad_w;
 
-                    if (row_hat >= 0 && row_hat < h_in && col_hat >= 0 && col_hat < w_in)
-                        IN_DATA_CHUNK[load_y][load_x] = in[
-                                                            bs * (num_channels * h_in * w_in) + 
-                                                            c * (h_in * w_in) + row_hat * w_in + 
-                                                            col_hat
-                                                        ];
-                    else
-                        IN_DATA_CHUNK[load_y][load_x] = 0.0f;
-                }
-                __syncthreads();
-
-                if (filter_k < num_filters && row < h_out && col < w_out)
-                {
-                    for (int f_i = 0; f_i < filter_size; f_i++)
-                    {
-                        for (int f_j = 0; f_j < filter_size; f_j++)
-                        {
-                            val += IN_DATA_CHUNK[threadIdx.y + f_i][threadIdx.x + f_j] *
-                                            filter[
-                                                filter_k * (num_channels * filter_size * filter_size) + 
-                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
-                                                f_j
-                                            ];
-                        }
-                    }
-                }
-                __syncthreads();
+                if (row_hat >= 0 && row_hat < h_in && col_hat >= 0 && col_hat < w_in)
+                    IN_DATA_CHUNK[load_y][load_x] = in[
+                                                        bs * (num_channels * h_in * w_in) + 
+                                                        c * (h_in * w_in) + row_hat * w_in + 
+                                                        col_hat
+                                                    ];
+                else
+                    IN_DATA_CHUNK[load_y][load_x] = 0.0f;
             }
+            __syncthreads();
 
             if (filter_k < num_filters && row < h_out && col < w_out)
-                out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
-
+            {
+                for (int f_i = 0; f_i < filter_size; f_i++)
+                {
+                    for (int f_j = 0; f_j < filter_size; f_j++)
+                    {
+                        val += IN_DATA_CHUNK[threadIdx.y + f_i][threadIdx.x + f_j] *
+                                        filter[
+                                            filter_k * (num_channels * filter_size * filter_size) + 
+                                            c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                            f_j
+                                        ];
+                    }
+                }
+            }
+            __syncthreads();
         }
+
+        if (filter_k < num_filters && row < h_out && col < w_out)
+            out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
+
     }
 }
 

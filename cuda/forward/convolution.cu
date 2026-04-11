@@ -138,6 +138,83 @@ __global__ void conv2d_kernelv2(float *in,
     }
 }
 
+
+
+// one might be curious as to why I implemented the above version, if I find out, I will tell you (but how?)
+__global__ void conv2d_kernelv3(float *in, 
+                              float *filter, 
+                              float *out, 
+                              int batch_size, int h_in, int w_in, int h_out, int w_out, int num_channels,
+                              int num_filters, int filter_size,
+                              int pad_h, int pad_w, int stride
+                            ) 
+{
+
+    int filter_k = blockIdx.z * blockDim.z + threadIdx.z;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int IN_DIM = BLOCK_SIZE + 3 - 1;
+    __shared__ float IN_DATA_CHUNK[IN_DIM][IN_DIM];
+
+    {
+        for (int bs = 0; bs < batch_size; bs++)
+        {
+            float val = 0.0f;
+            for (int c = 0; c < num_channels; c++)
+            {
+                // flattened thread_id -> (elements_to_load: num_threads)
+                for (int i = (threadIdx.y * blockDim.x + threadIdx.x); i < (IN_DIM * IN_DIM); i += (blockDim.x * blockDim.y))
+                {
+                    /*
+                        We flattened our input data and threads, and map the block onto input data to contagiously
+                        load num_threads elements, in this case there is control diveregence at the 2 edges.
+                        If we used 2D nested loop, then there would be control divergence at each boundary.
+                    */
+
+                    // compute the 2D index
+                    int load_y = i / IN_DIM;
+                    int load_x = i % IN_DIM;
+                    
+                    // offset into the block using load_y & load_x and shift by pad_h & pad_w to handle padding.
+                    int row_hat = (blockIdx.y * blockDim.y) + load_y - pad_h;
+                    int col_hat = (blockIdx.x * blockDim.x) + load_x - pad_w;
+
+                    if (row_hat >= 0 && row_hat < h_in && col_hat >= 0 && col_hat < w_in)
+                        IN_DATA_CHUNK[load_y][load_x] = in[
+                                                            bs * (num_channels * h_in * w_in) + 
+                                                            c * (h_in * w_in) + row_hat * w_in + 
+                                                            col_hat
+                                                        ];
+                    else
+                        IN_DATA_CHUNK[load_y][load_x] = 0.0f;
+                }
+                __syncthreads();
+
+                if (filter_k < num_filters && row < h_out && col < w_out)
+                {
+                    for (int f_i = 0; f_i < filter_size; f_i++)
+                    {
+                        for (int f_j = 0; f_j < filter_size; f_j++)
+                        {
+                            val += IN_DATA_CHUNK[threadIdx.y + f_i][threadIdx.x + f_j] *
+                                            filter[
+                                                filter_k * (num_channels * filter_size * filter_size) + 
+                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                                f_j
+                                            ];
+                        }
+                    }
+                }
+                __syncthreads();
+            }
+
+            if (filter_k < num_filters && row < h_out && col < w_out)
+                out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
+
+        }
+    }
+}
+
 void conv2d_forward_pass(float *in_h, 
                         float *filter_h, 
                         float *out_h, 
@@ -176,9 +253,9 @@ void conv2d_forward_pass(float *in_h,
     CUDA_CHECK( cudaMemcpy(filter_d, filter_h, (num_filters * num_channels * filter_size * filter_size * sizeof(float)), cudaMemcpyHostToDevice) );
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
-    dim3 dimGrid(cdiv(h_out, BLOCK_SIZE), cdiv(w_out, BLOCK_SIZE), num_filters);
+    dim3 dimGrid(cdiv(w_out, BLOCK_SIZE), cdiv(h_out, BLOCK_SIZE), num_filters);
 
-    conv2d_kernelv2<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w, stride);
+    conv2d_kernelv3<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w, stride);
     CUDA_CHECK(cudaGetLastError());
     
     CUDA_CHECK(cudaMemcpy(out_h, out_d, (batch_size * num_filters * h_out * w_out * sizeof(float)), cudaMemcpyDeviceToHost));

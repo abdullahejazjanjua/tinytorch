@@ -1,0 +1,1 @@
+### From scratch implementation of deep learning application with a focus on understanding how GPUs code interactive with CPU to implement DL architectures. We will use this library to implement a small classification network

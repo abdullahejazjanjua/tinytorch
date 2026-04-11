@@ -76,13 +76,13 @@ void conv2d_forward_pass(float *in_h,
     CUDA_CHECK( cudaMalloc((void**)&filter_d, filter_size * filter_size * sizeof(float)) );
 
     CUDA_CHECK( cudaMemcpy(in_d, in_h, h_in * w_in * sizeof(float), cudaMemcpyHostToDevice) );
-    CUDA_CHECK( cudaMemcpy(in_d, in_h, h_out * w_out * sizeof(float), cudaMemcpyHostToDevice) );
+    CUDA_CHECK( cudaMemcpy(out_d, out_h, h_out * w_out * sizeof(float), cudaMemcpyHostToDevice) );
     CUDA_CHECK( cudaMemcpy(filter_d, filter_h, filter_size * filter_size * sizeof(float), cudaMemcpyHostToDevice) );
 
     dim3 dimBlock(32, 32, 1);
     dim3 dimGrid(cdiv(h_out, 32), cdiv(w_out, 32));
 
-    conv2d_kernel<<<dimGrid, dimBlock>>>(in_d, filter_h, out_d, h_in, w_in, h_out, w_out, filter_size, pad_h, pad_w, stride);
+    conv2d_kernel<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, h_in, w_in, h_out, w_out, filter_size, pad_h, pad_w, stride);
     CUDA_CHECK(cudaGetLastError());
     
     CUDA_CHECK(cudaMemcpy(out_h, out_d, (h_out * w_out * sizeof(float)), cudaMemcpyDeviceToHost));
@@ -96,15 +96,10 @@ int main() {
     int h_in = 5;
     int w_in = 5;
     int filter_size = 3;
-    int padding = 0;
     int stride = 1;
-
-    int h_out = h_in - filter_size + 1;
-    int w_out = w_in - filter_size + 1;
 
     float *in_h = (float*)malloc(h_in * w_in * sizeof(float));
     float *filter_h = (float*)malloc(filter_size * filter_size * sizeof(float));
-    float *out_h = (float*)malloc(h_out * w_out * sizeof(float));
 
     for (int i = 0; i < h_in * w_in; i++) {
         in_h[i] = 1.0f;
@@ -114,11 +109,58 @@ int main() {
         filter_h[i] = 1.0f;
     }
 
-    conv2d_forward_pass(in_h, filter_h, out_h, h_in, w_in, filter_size, padding, stride);
+    printf("Input Data:\n");
+    for (int i = 0; i < h_in; i++) {
+        for (int j = 0; j < w_in; j++) {
+            printf("%f ", in_h[i * w_in + j]);
+        }
+        printf("\n");
+    }
+
+    printf("Filter Data:\n");
+    for (int i = 0; i < filter_size; i++) {
+        for (int j = 0; j < filter_size; j++) {
+            printf("%f ", filter_h[i * filter_size + j]);
+        }
+        printf("\n");
+    }
+
+    // --- Test Case 1: Padding = 0 (Valid) ---
+    int padding_valid = 0;
+    int h_out_valid = h_in - filter_size + 1;
+    int w_out_valid = w_in - filter_size + 1;
+    float *out_h_valid = (float*)malloc(h_out_valid * w_out_valid * sizeof(float));
+
+    conv2d_forward_pass(in_h, filter_h, out_h_valid, h_in, w_in, filter_size, padding_valid, stride);
+    
+    printf("Output Data (Padding = 0):\n");
+    for (int i = 0; i < h_out_valid; i++) {
+        for (int j = 0; j < w_out_valid; j++) {
+            printf("%f ", out_h_valid[i * w_out_valid + j]);
+        }
+        printf("\n");
+    }
+    free(out_h_valid);
+
+    // --- Test Case 2: Padding = 1 (Same) ---
+    int padding_same = 1;
+    int h_out_same = h_in;
+    int w_out_same = w_in;
+    float *out_h_same = (float*)malloc(h_out_same * w_out_same * sizeof(float));
+
+    conv2d_forward_pass(in_h, filter_h, out_h_same, h_in, w_in, filter_size, padding_same, stride);
+    
+    printf("Output Data (Padding = 1):\n");
+    for (int i = 0; i < h_out_same; i++) {
+        for (int j = 0; j < w_out_same; j++) {
+            printf("%f ", out_h_same[i * w_out_same + j]);
+        }
+        printf("\n");
+    }
+    free(out_h_same);
 
     free(in_h);
     free(filter_h);
-    free(out_h);
 
     return 0;
 }

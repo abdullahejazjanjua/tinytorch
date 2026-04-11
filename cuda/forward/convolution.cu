@@ -17,7 +17,7 @@ __global__ void conv2d_kernel(float *in,
                               float *out, 
                               int batch_size, int h_in, int w_in, int h_out, int w_out, int num_channels,
                               int num_filters, int filter_size,
-                              int pad_h, int pad_w, int stride
+                              int pad_h, int pad_w
                             ) 
 {
     int filter_k = blockIdx.z * blockDim.z + threadIdx.z;
@@ -62,7 +62,7 @@ __global__ void conv2d_kernelv2(float *in,
                               float *out, 
                               int batch_size, int h_in, int w_in, int h_out, int w_out, int num_channels,
                               int num_filters, int filter_size,
-                              int pad_h, int pad_w, int stride
+                              int pad_h, int pad_w
                             ) 
 {
 
@@ -146,7 +146,7 @@ __global__ void conv2d_kernelv3(float *in,
                               float *out, 
                               int batch_size, int h_in, int w_in, int h_out, int w_out, int num_channels,
                               int num_filters, int filter_size,
-                              int pad_h, int pad_w, int stride
+                              int pad_h, int pad_w
                             ) 
 {
 
@@ -220,15 +220,15 @@ void conv2d_forward_pass(float *in_h,
                         float *out_h, 
                         int batch_size, int h_in, int w_in, int num_channels,
                         int num_filters, int filter_size, 
-                        int padding, int stride
+                        int padding
                     )
 {
     float *in_d, *out_d, *filter_d;
     int h_out, w_out, pad_h, pad_w;
     if (!padding) // no padding
     {
-        h_out = floor((h_in - filter_size)/(float) stride) + 1;
-        w_out = floor((w_in - filter_size)/(float) stride) + 1;
+        h_out = floor(h_in - filter_size) + 1;
+        w_out = floor(w_in - filter_size) + 1;
         
         pad_h = 0;
         pad_w = 0;
@@ -255,7 +255,7 @@ void conv2d_forward_pass(float *in_h,
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 dimGrid(cdiv(w_out, BLOCK_SIZE), cdiv(h_out, BLOCK_SIZE), num_filters);
 
-    conv2d_kernelv3<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w, stride);
+    conv2d_kernelv3<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w);
     CUDA_CHECK(cudaGetLastError());
     
     CUDA_CHECK(cudaMemcpy(out_h, out_d, (batch_size * num_filters * h_out * w_out * sizeof(float)), cudaMemcpyDeviceToHost));
@@ -274,7 +274,6 @@ int main()
     int num_channels = 3;
     int num_filters = 2; 
     int filter_size = 3;
-    int stride = 1;
 
     float *in_h = (float*)malloc(batch_size * num_channels * h_in * w_in * sizeof(float));
     float *filter_h = (float*)malloc(num_filters * num_channels * filter_size * filter_size * sizeof(float));
@@ -321,7 +320,7 @@ int main()
     int w_out_valid = w_in - filter_size + 1;
     float *out_h_valid = (float*)malloc(batch_size * num_filters * h_out_valid * w_out_valid * sizeof(float));
 
-    conv2d_forward_pass(in_h, filter_h, out_h_valid, batch_size, h_in, w_in, num_channels, num_filters, filter_size, padding_valid, stride);
+    conv2d_forward_pass(in_h, filter_h, out_h_valid, batch_size, h_in, w_in, num_channels, num_filters, filter_size, padding_valid);
     
     printf("\nOutput Data (Padding = 0):\n");
     for (int bs = 0; bs < batch_size; bs++) {
@@ -344,7 +343,7 @@ int main()
     int w_out_same = w_in;
     float *out_h_same = (float*)malloc(batch_size * num_filters * h_out_same * w_out_same * sizeof(float));
 
-    conv2d_forward_pass(in_h, filter_h, out_h_same, batch_size, h_in, w_in, num_channels, num_filters, filter_size, padding_same, stride);
+    conv2d_forward_pass(in_h, filter_h, out_h_same, batch_size, h_in, w_in, num_channels, num_filters, filter_size, padding_same);
     
     printf("\nOutput Data (Padding = 1):\n");
     for (int bs = 0; bs < batch_size; bs++) {

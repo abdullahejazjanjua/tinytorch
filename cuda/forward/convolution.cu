@@ -2,8 +2,7 @@
 
 #include "../common.h"
 
-#define FILTER_RADIUS(filter_size)(((filter_size - 1)/2))
-
+#define BLOCK_SIZE 32
 
 /*
     float *in: input data with shape [batch_size, channels, height, width]
@@ -58,6 +57,87 @@ __global__ void conv2d_kernel(float *in,
     }
 }
 
+__global__ void conv2d_kernelv2(float *in, 
+                              float *filter, 
+                              float *out, 
+                              int batch_size, int h_in, int w_in, int h_out, int w_out, int num_channels,
+                              int num_filters, int filter_size,
+                              int pad_h, int pad_w, int stride
+                            ) 
+{
+
+    int filter_k = blockIdx.z * blockDim.z + threadIdx.z;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    __shared__ float IN_DATA_CHUNK[BLOCK_SIZE][BLOCK_SIZE];
+
+    {
+        for (int bs = 0; bs < batch_size; bs++)
+        {
+            float val = 0.0f;
+            for (int c = 0; c < num_channels; c++)
+            {
+                if (row < h_in && col < w_in)
+                    IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = in[
+                                                            bs * (num_channels * h_in * w_in) + 
+                                                            c * (h_in * w_in)                 + 
+                                                            row * (w_in)                      + 
+                                                            col
+                                                     ];
+                else
+                    IN_DATA_CHUNK[threadIdx.y][threadIdx.x] = 0.0f;
+                __syncthreads();
+
+                if (filter_k < num_filters && row < h_out && col < w_out)
+                {
+                    for (int f_i = 0; f_i < filter_size; f_i++)
+                    {
+                        for (int f_j = 0; f_j < filter_size; f_j++)
+                        {
+                            if ((threadIdx.y + f_i - pad_h) >= 0 && (threadIdx.y + f_i - pad_h) < BLOCK_SIZE
+                                                            &&
+                                (threadIdx.x + f_j - pad_w) >= 0 && (threadIdx.x + f_j - pad_w) < BLOCK_SIZE)
+                                {
+                                    val += IN_DATA_CHUNK[threadIdx.y + f_i - pad_h][threadIdx.x + f_j - pad_w] *
+                                            filter[
+                                                filter_k * (num_channels * filter_size * filter_size) + 
+                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                                f_j
+                                            ];
+                                }
+                            else if ((row + f_i - pad_h) >= 0 && (row + f_i - pad_h) < h_in 
+                                                            &&
+                                    (col + f_j - pad_w) >= 0 && (col + f_j - pad_w) < w_in)
+                                {
+                                    int row_hat = row + f_i - pad_h;
+                                    int col_hat = col + f_j - pad_w;
+                                    // bring that fker from cache (hopefully :D)
+                                    val += in[
+                                                bs * (num_channels * h_in * w_in) + 
+                                                c * (h_in * w_in)                 + 
+                                                row_hat * (w_in)                  + 
+                                                col_hat
+                                            ] *
+                                            filter[
+                                                filter_k * (num_channels * filter_size * filter_size) + 
+                                                c * (filter_size * filter_size) + (f_i * filter_size) + 
+                                                f_j
+                                            ];
+                                }
+                        }
+                    }
+                }
+                __syncthreads();
+            }
+
+            if (filter_k < num_filters && row < h_out && col < w_out)
+                out[bs * (num_filters * h_out * w_out) + filter_k * (h_out * w_out) + row * w_out + col] = val;
+
+        }
+    }
+}
+
 void conv2d_forward_pass(float *in_h, 
                         float *filter_h, 
                         float *out_h, 
@@ -95,10 +175,10 @@ void conv2d_forward_pass(float *in_h,
     CUDA_CHECK( cudaMemcpy(in_d, in_h, (batch_size * num_channels * h_in * w_in * sizeof(float)), cudaMemcpyHostToDevice) );
     CUDA_CHECK( cudaMemcpy(filter_d, filter_h, (num_filters * num_channels * filter_size * filter_size * sizeof(float)), cudaMemcpyHostToDevice) );
 
-    dim3 dimBlock(32, 32, 1);
-    dim3 dimGrid(cdiv(h_out, 32), cdiv(w_out, 32), num_filters);
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+    dim3 dimGrid(cdiv(h_out, BLOCK_SIZE), cdiv(w_out, BLOCK_SIZE), num_filters);
 
-    conv2d_kernel<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w, stride);
+    conv2d_kernelv2<<<dimGrid, dimBlock>>>(in_d, filter_d, out_d, batch_size, h_in, w_in, h_out, w_out, num_channels, num_filters, filter_size, pad_h, pad_w, stride);
     CUDA_CHECK(cudaGetLastError());
     
     CUDA_CHECK(cudaMemcpy(out_h, out_d, (batch_size * num_filters * h_out * w_out * sizeof(float)), cudaMemcpyDeviceToHost));

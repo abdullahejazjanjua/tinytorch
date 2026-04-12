@@ -5,11 +5,17 @@
 #define BLOCK_SIZE 32
 
 /*
-    float *in: input data with shape [batch_size, channels, height, width]
-    float *out: resulting output data with shape [batch_size, channels', height', width']
-    float filter: Kernel to slid over the in, has shape [num_kernels, num_channels, filter_size, filter_size]
-    int height: represents height of in
-    int width: represents width of in
+    float *in:          Input data with shape [batch_size, num_channels, h_in, w_in]
+    float *filter:      Weight data with shape [num_filters, num_channels, filter_size, filter_size]
+    float *out:         Output data with shape [batch_size, num_filters, h_out, w_out]
+    int batch_size:     Number of images in the input batch
+    int h_in, w_in:     Height and width of the input images
+    int h_out, w_out:   Height and width of the resulting output images
+    int num_channels:   Number of input feature maps (e.g., 3 for RGB)
+    int num_filters:    Number of output feature maps (kernels)
+    int filter_size:    Spatial dimensions of the square kernel
+    int pad_h, pad_w:   Vertical and horizontal zero-padding applied to the input, 
+                        interestingly this equivalent to filter_radius
 */
 
 __global__ void conv2d_kernel(float *in, 

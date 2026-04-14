@@ -92,8 +92,8 @@ __global__ void conv2d_kernelv2(float *in,
                 {
                     for (int f_j = 0; f_j < kernel_size; f_j++)
                     {
-                        if ((threadIdx.y + f_i - pad_h) >= 0 && (threadIdx.y + f_i - pad_h) < BLOCK_SIZE &&
-                            (threadIdx.x + f_j - pad_w) >= 0 && (threadIdx.x + f_j - pad_w) < BLOCK_SIZE)
+                        if ((threadIdx.y + f_i - pad_h) < BLOCK_SIZE &&
+                            (threadIdx.x + f_j - pad_w) < BLOCK_SIZE)
                         {
                             val += s_input_tile[threadIdx.y + f_i - pad_h][threadIdx.x + f_j - pad_w] *
                                    c_filter[filter_k * (in_channels * kernel_size * kernel_size) +
@@ -297,7 +297,7 @@ void conv2d_forward_pass(float *h_input,
                          int out_channels, int kernel_size,
                          int padding)
 {
-    float *d_input, *d_output, *filter_d;
+    float *d_input, *d_output;
     int output_height, output_width, pad_h, pad_w;
     if (!padding) // no padding
     {

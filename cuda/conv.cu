@@ -4,25 +4,13 @@
 #include "../include/common.cuh"
 #include "../include/tensor.h"
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE_FORWARD 32
+#define BLOCK_SIZE_BACKWARD_W 16
 #define COARSE_FACTOR 2
 #define MAX_FILTER_SIZE 16384
 #define MAX_K 11
 
 __constant__ float c_filter[MAX_FILTER_SIZE];
-
-/*
-    float *in:          Input data with shape [batch_size, in_channels, input_height, input_width]
-    float *out:         Output data with shape [batch_size, out_channels, output_height, output_width]
-    int batch_size:     Number of images in the input batch
-    int input_height, input_width:     Height and width of the input images
-    int output_height, output_width:   Height and width of the resulting output images
-    int in_channels:   Number of input feature maps (e.g., 3 for RGB)
-    int out_channels:    Number of output feature maps (kernels)
-    int kernel_size:    Spatial dimensions of the square kernel
-    int pad_h, pad_w:   Vertical and horizontal zero-padding applied to the input,
-                        interestingly this equivalent to filter_radius
-*/
 
 __global__ void conv2d_forward_kernel(float *in,
                                       int batch_size,
@@ -35,8 +23,9 @@ __global__ void conv2d_forward_kernel(float *in,
 {
 
     // grid_width is out_channels / COARSE_FACTOR
-    int start_filter_idx = (blockIdx.z % (out_channels / COARSE_FACTOR)) * COARSE_FACTOR;
-    int start_batch_idx = (blockIdx.z / (out_channels / COARSE_FACTOR)) * COARSE_FACTOR;
+    int filter_groups = cdiv(out_channels, COARSE_FACTOR);
+    int start_filter_idx = (blockIdx.z % filter_groups) * COARSE_FACTOR;
+    int start_batch_idx  = (blockIdx.z / filter_groups) * COARSE_FACTOR;
 
     int out_y = blockIdx.y * blockDim.y + threadIdx.y;
     int out_x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -256,10 +245,10 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
     CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpyToSymbol(c_filter, filters->data, filters->size * sizeof(float)));
 
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
-    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE), cdiv(output_height, BLOCK_SIZE), cdiv(batch_size * out_channels, COARSE_FACTOR));
+    dim3 dimBlock(BLOCK_SIZE_FORWARD, BLOCK_SIZE_FORWARD, 1);
+    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE_FORWARD), cdiv(output_height, BLOCK_SIZE_FORWARD), cdiv(batch_size, COARSE_FACTOR) * cdiv(out_channels, COARSE_FACTOR));
 
-    int tile_dim = BLOCK_SIZE + kernel_size - 1;
+    int tile_dim = BLOCK_SIZE_FORWARD + kernel_size - 1;
     size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
 
     conv2d_forward_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, batch_size, input_height,
@@ -303,9 +292,9 @@ void conv2d_backward_pass_w(const Tensor *input, const Tensor *dout, int padding
     CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
 
-    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
-    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE), cdiv(output_height, BLOCK_SIZE), out_channels * in_channels);
-    int tile_dim = BLOCK_SIZE + kernel_size - 1;
+    dim3 dimBlock(BLOCK_SIZE_BACKWARD_W, BLOCK_SIZE_BACKWARD_W, 1);
+    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE_BACKWARD_W), cdiv(output_height, BLOCK_SIZE_BACKWARD_W), out_channels * in_channels);
+    int tile_dim = BLOCK_SIZE_BACKWARD_W + kernel_size - 1;
     size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
 
     switch (kernel_size) {

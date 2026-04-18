@@ -1,0 +1,267 @@
+#include <assert.h>
+
+#include "../include/common.cuh"
+#include "../include/tensor.h"
+
+#define BLOCK_SIZE 32
+#define COARSE_FACTOR 2
+#define MAX_FILTER_SIZE 16384
+
+__constant__ float c_filter[MAX_FILTER_SIZE];
+
+/*
+    float *in:          Input data with shape [batch_size, in_channels, input_height, input_width]
+    float *out:         Output data with shape [batch_size, out_channels, output_height, output_width]
+    int batch_size:     Number of images in the input batch
+    int input_height, input_width:     Height and width of the input images
+    int output_height, output_width:   Height and width of the resulting output images
+    int in_channels:   Number of input feature maps (e.g., 3 for RGB)
+    int out_channels:    Number of output feature maps (kernels)
+    int kernel_size:    Spatial dimensions of the square kernel
+    int pad_h, pad_w:   Vertical and horizontal zero-padding applied to the input,
+                        interestingly this equivalent to filter_radius
+*/
+
+__global__ void conv2d_forward_kernel(float *in,
+                                      int batch_size,
+                                      int input_height, int input_width,
+                                      int output_height, int output_width,
+                                      int in_channels, int out_channels,
+                                      int kernel_size,
+                                      int pad_h, int pad_w,
+                                      float *out)
+{
+
+    // grid_width is out_channels / COARSE_FACTOR
+    int start_filter_idx = (blockIdx.z % (out_channels / COARSE_FACTOR)) * COARSE_FACTOR;
+    int start_batch_idx = (blockIdx.z / (out_channels / COARSE_FACTOR)) * COARSE_FACTOR;
+
+    int out_y = blockIdx.y * blockDim.y + threadIdx.y;
+    int out_x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    extern __shared__ float s_input_tile[];
+    int tile_dim = blockDim.x + kernel_size - 1;
+
+    // Accumulators for the filter coarsening dimension
+    float accumulators[COARSE_FACTOR];
+
+    for (int i = 0; i < COARSE_FACTOR; i++)
+    {
+        int bs = start_batch_idx + i;
+        if (bs >= batch_size)
+            continue;
+
+        for (int v = 0; v < COARSE_FACTOR; v++)
+            accumulators[v] = 0.0f;
+
+        for (int c = 0; c < in_channels; c++)
+        {
+            // co-operative load of input tile
+            for (int t = (threadIdx.y * blockDim.x + threadIdx.x); t < (tile_dim * tile_dim); t += (blockDim.x * blockDim.y))
+            {
+
+                int load_y = t / tile_dim;
+                int load_x = t % tile_dim;
+
+                int in_y = (blockIdx.y * blockDim.y) + load_y - pad_h;
+                int in_x = (blockIdx.x * blockDim.x) + load_x - pad_w;
+
+                if (in_y >= 0 && in_y < input_height && in_x >= 0 && in_x < input_width)
+                    s_input_tile[load_y * tile_dim + load_x] = in[bs * (in_channels * input_height * input_width) +
+                                                                  c * (input_height * input_width) + in_y * input_width +
+                                                                  in_x];
+                else
+                    s_input_tile[load_y * tile_dim + load_x] = 0.0f;
+            }
+            __syncthreads();
+
+            if (out_y < output_height && out_x < output_width)
+            {
+                for (int j = 0; j < COARSE_FACTOR; j++)
+                {
+                    int filter_k = start_filter_idx + j;
+                    if (filter_k < out_channels)
+                    {
+                        #pragma unroll
+                        for (int f_i = 0; f_i < kernel_size; f_i++)
+                        {
+                            #pragma unroll
+                            for (int f_j = 0; f_j < kernel_size; f_j++)
+                            {
+                                accumulators[j] += s_input_tile[(threadIdx.y + f_i) * tile_dim + (threadIdx.x + f_j)] *
+                                                   c_filter[filter_k * (in_channels * kernel_size * kernel_size) +
+                                                            c * (kernel_size * kernel_size) + (f_i * kernel_size) +
+                                                            f_j];
+                            }
+                        }
+                    }
+                }
+            }
+            __syncthreads();
+        }
+
+        if (out_y < output_height && out_x < output_width)
+        {
+            for (int j = 0; j < COARSE_FACTOR; j++)
+            {
+                int filter_k = start_filter_idx + j;
+                if (filter_k < out_channels)
+                {
+                    out[bs * (out_channels * output_height * output_width) + filter_k * (output_height * output_width) + out_y * output_width + out_x] = accumulators[j];
+                }
+            }
+        }
+    }
+}
+
+__global__ void conv2d_backward_weight_kernel(float *in,
+                                              float *dout,
+                                              int batch_size,
+                                              int input_height, int input_width,
+                                              int output_height, int output_width,
+                                              int in_channels, int out_channels,
+                                              int kernel_size,
+                                              int pad_h, int pad_w,
+                                              float *grad_w)
+{
+    int in_channel_idx = (blockIdx.z % in_channels);
+    int out_channel_idx = (blockIdx.z / in_channels);
+
+    int ky = blockIdx.y * blockDim.y + threadIdx.y;
+    int kx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+
+    float acc = 0.0f;
+    for (int bs = 0; bs < batch_size; bs++)
+    {
+        for (int dout_y = 0; dout_y < output_height; dout_y++)
+        {
+            for (int dout_x = 0; dout_x < output_width; dout_x++)
+            {
+                int in_y = dout_y + ky - pad_h;
+                int in_x = dout_x + kx - pad_w;
+                if (in_y >= 0 && in_y < input_height && in_x >= 0 && in_x < input_width)
+                    acc += in[bs * (in_channels * input_height * input_width) +
+                            in_channel_idx * (input_height * input_width)   +
+                            in_y * (input_width)                            + 
+                            in_x] *
+                        dout[bs * (out_channels * output_height * output_width) +
+                            out_channel_idx * (output_height * output_width)    +
+                            dout_y * (output_width)                               + 
+                            dout_x];
+                        
+            }
+        }
+    }
+
+    if (kx < kernel_size && ky < kernel_size)
+        grad_w[out_channel_idx * (in_channels * kernel_size * kernel_size) + 
+            in_channel_idx * (kernel_size * kernel_size)                +
+            ky * (kernel_size)                                       + 
+            kx] = acc;
+}
+
+void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding, Tensor *output)
+{
+    int batch_size = input->shape[0];
+    int in_channels = input->shape[1];
+    int input_height = input->shape[2];
+    int input_width = input->shape[3];
+
+    int out_channels = filters->shape[0];
+    int kernel_size = filters->shape[2];
+
+    int pad_h = 0, pad_w = 0;
+    if (padding)
+    {
+        output->shape[2] = input_height;
+        output->shape[3] = input_width;
+
+        pad_h = (kernel_size - 1) / 2;
+        pad_w = (kernel_size - 1) / 2;
+    }
+    else
+    {
+        output->shape[2] = input_height - kernel_size + 1;
+        output->shape[3] = input_width - kernel_size + 1;
+        assert(output->shape[2] > 0 && output->shape[3] > 0);
+    }
+
+    output->shape[0] = batch_size;
+    output->shape[1] = out_channels;
+
+    int output_height = output->shape[2];
+    int output_width = output->shape[3];
+
+    output->size = batch_size * out_channels * output_height * output_width;
+
+    output->data = (float *)malloc(output->size * sizeof(float));
+
+    float *d_input, *d_output;
+    CUDA_CHECK(cudaMalloc((void **)&d_input, input->size * sizeof(float)));
+    CUDA_CHECK(cudaMalloc((void **)&d_output, output->size * sizeof(float)));
+
+    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpyToSymbol(c_filter, filters->data, filters->size * sizeof(float)));
+
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE), cdiv(output_height, BLOCK_SIZE), cdiv(batch_size * out_channels, COARSE_FACTOR));
+
+    int tile_dim = BLOCK_SIZE + kernel_size - 1;
+    size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
+
+    conv2d_forward_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, batch_size, input_height,
+                                                                       input_width, output_height, output_width,
+                                                                       in_channels, out_channels, kernel_size, 
+                                                                       pad_h, pad_w, d_output);
+    CUDA_CHECK(cudaGetLastError());
+
+    CUDA_CHECK(cudaMemcpy(output->data, d_output, output->size * sizeof(float), cudaMemcpyDeviceToHost));
+
+    cudaFree(d_input);
+    cudaFree(d_output);
+}
+
+void conv2d_backward_pass_w(const Tensor *input, const Tensor *dout, int padding, Tensor *grad_w)
+{
+    int batch_size = input->shape[0];
+    int in_channels = input->shape[1];
+    int input_height = input->shape[2];
+    int input_width = input->shape[3];
+
+    int out_channels = dout->shape[1];
+    int output_height = dout->shape[2];
+    int output_width = dout->shape[3];
+
+    int kernel_size = grad_w->shape[2];
+
+    int pad_h = 0;
+    int pad_w = 0;
+
+    if (padding)
+    {
+        pad_h = (kernel_size - 1) / 2;
+        pad_w = (kernel_size - 1) / 2;
+    }
+
+    float *d_input, *d_dout, *d_grad_w;
+    CUDA_CHECK(cudaMalloc((void **)&d_input, (input->size * sizeof(float))));
+    CUDA_CHECK(cudaMalloc((void **)&d_grad_w, (grad_w->size * sizeof(float))));
+
+    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
+
+    dim3 dimBlock(kernel_size, kernel_size, 1);
+    dim3 dimGrid(1, 1, out_channels * in_channels);
+
+    conv2d_backward_weight_kernel<<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+                                                                       input_width, output_height, output_width,
+                                                                       in_channels, out_channels, kernel_size, 
+                                                                       pad_h, pad_w, d_grad_w);
+
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK( cudaMemcpy(grad_w->data, d_dout, grad_w->size * sizeof(float), cudaMemcpyDeviceToHost) );
+
+    cudaFree(d_input);
+    cudaFree(d_dout);
+}

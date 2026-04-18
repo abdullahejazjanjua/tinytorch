@@ -187,3 +187,95 @@ __global__ void conv2d_kernelv3(float *in,
     if (filter_k < out_channels && out_y < output_height && out_x < output_width)
         out[bs * (out_channels * output_height * output_width) + filter_k * (output_height * output_width) + out_y * output_width + out_x] = val;
 }
+
+
+__global__ void conv2d_backward_weight_kernelv1(float *in,
+                                              float *dout,
+                                              int batch_size,
+                                              int input_height, int input_width,
+                                              int output_height, int output_width,
+                                              int in_channels, int out_channels,
+                                              int kernel_size,
+                                              int pad_h, int pad_w,
+                                              float *grad_w)
+{
+    int in_channel_idx = (blockIdx.z % in_channels);
+    int out_channel_idx = (blockIdx.z / in_channels);
+
+    int ky = blockIdx.y * blockDim.y + threadIdx.y;
+    int kx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+
+    float acc = 0.0f;
+    for (int bs = 0; bs < batch_size; bs++)
+    {
+        for (int dout_y = 0; dout_y < output_height; dout_y++)
+        {
+            for (int dout_x = 0; dout_x < output_width; dout_x++)
+            {
+                int in_y = dout_y + ky - pad_h;
+                int in_x = dout_x + kx - pad_w;
+                if (in_y >= 0 && in_y < input_height && in_x >= 0 && in_x < input_width)
+                    acc += in[bs * (in_channels * input_height * input_width) +
+                            in_channel_idx * (input_height * input_width)   +
+                            in_y * (input_width)                            + 
+                            in_x] *
+                        dout[bs * (out_channels * output_height * output_width) +
+                            out_channel_idx * (output_height * output_width)    +
+                            dout_y * (output_width)                               + 
+                            dout_x];
+                        
+            }
+        }
+    }
+
+    if (kx < kernel_size && ky < kernel_size)
+        grad_w[out_channel_idx * (in_channels * kernel_size * kernel_size) + 
+            in_channel_idx * (kernel_size * kernel_size)                +
+            ky * (kernel_size)                                       + 
+            kx] = acc;
+}
+
+void conv2d_backward_pass_wv1(const Tensor *input, const Tensor *dout, int padding, Tensor *grad_w)
+{
+    int batch_size = input->shape[0];
+    int in_channels = input->shape[1];
+    int input_height = input->shape[2];
+    int input_width = input->shape[3];
+
+    int out_channels = dout->shape[1];
+    int output_height = dout->shape[2];
+    int output_width = dout->shape[3];
+
+    int kernel_size = grad_w->shape[2];
+
+    int pad_h = 0;
+    int pad_w = 0;
+
+    if (padding)
+    {
+        pad_h = (kernel_size - 1) / 2;
+        pad_w = (kernel_size - 1) / 2;
+    }
+
+    float *d_input, *d_dout, *d_grad_w;
+    CUDA_CHECK(cudaMalloc((void **)&d_input, (input->size * sizeof(float))));
+    CUDA_CHECK(cudaMalloc((void **)&d_grad_w, (grad_w->size * sizeof(float))));
+
+    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
+
+    dim3 dimBlock(kernel_size, kernel_size, 1);
+    dim3 dimGrid(1, 1, out_channels * in_channels);
+
+    conv2d_backward_weight_kernelv1<<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+                                                                       input_width, output_height, output_width,
+                                                                       in_channels, out_channels, kernel_size, 
+                                                                       pad_h, pad_w, d_grad_w);
+
+    CUDA_CHECK(cudaGetLastError());
+    CUDA_CHECK( cudaMemcpy(grad_w->data, d_dout, grad_w->size * sizeof(float), cudaMemcpyDeviceToHost) );
+
+    cudaFree(d_input);
+    cudaFree(d_dout);
+}

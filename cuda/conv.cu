@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 
 #include "../include/common.cuh"
 #include "../include/tensor.h"
@@ -6,6 +7,7 @@
 #define BLOCK_SIZE 32
 #define COARSE_FACTOR 2
 #define MAX_FILTER_SIZE 16384
+#define MAX_K 11
 
 __constant__ float c_filter[MAX_FILTER_SIZE];
 
@@ -114,6 +116,7 @@ __global__ void conv2d_forward_kernel(float *in,
     }
 }
 
+template <int K>
 __global__ void conv2d_backward_weight_kernel(float *in,
                                               float *dout,
                                               int batch_size,
@@ -127,38 +130,87 @@ __global__ void conv2d_backward_weight_kernel(float *in,
     int in_channel_idx = (blockIdx.z % in_channels);
     int out_channel_idx = (blockIdx.z / in_channels);
 
-    int ky = blockIdx.y * blockDim.y + threadIdx.y;
-    int kx = blockIdx.x * blockDim.x + threadIdx.x;
-    
+    int out_y = blockIdx.y * blockDim.y + threadIdx.y;
+    int out_x = blockIdx.x * blockDim.x + threadIdx.x;
 
-    float acc = 0.0f;
+    extern __shared__ float s_input_tile[];
+    int tile_dim = blockDim.x + kernel_size - 1;
+
+    // for block-level reduction
+    __shared__ float acc_reduction[K][K];
+    if (threadIdx.y < kernel_size && threadIdx.x < kernel_size)
+        acc_reduction[threadIdx.y][threadIdx.x] = 0.0f;
+
+    float acc[K][K];
+    #pragma unroll
+    for (int ky = 0; ky < K; ky++) {
+        #pragma unroll
+        for (int kx = 0; kx < K; kx++) {
+            acc[ky][kx] = 0.0f;
+        }
+    }
+
     for (int bs = 0; bs < batch_size; bs++)
     {
-        for (int dout_y = 0; dout_y < output_height; dout_y++)
+        __syncthreads();
+        // co-operatively, load kxk window into shared_mem
+        for (int t = (threadIdx.y * blockDim.x + threadIdx.x); t < (tile_dim * tile_dim); t += (blockDim.x * blockDim.y))
         {
-            for (int dout_x = 0; dout_x < output_width; dout_x++)
+
+            int load_y = t / tile_dim;
+            int load_x = t % tile_dim;
+
+            int in_y = (blockIdx.y * blockDim.y) + load_y - pad_h;
+            int in_x = (blockIdx.x * blockDim.x) + load_x - pad_w;
+
+            if (in_y >= 0 && in_y < input_height && in_x >= 0 && in_x < input_width)
+                s_input_tile[load_y * tile_dim + load_x] = in[bs * (in_channels * input_height * input_width) +
+                                                              in_channel_idx * (input_height * input_width) +
+                                                              in_y * input_width +
+                                                              in_x];
+            else
+                s_input_tile[load_y * tile_dim + load_x] = 0.0f;
+        }
+        __syncthreads();
+        
+        if (out_y < output_height && out_x < output_width) {
+            float dout_i = dout[bs * (out_channels * output_height * output_width) + 
+                                out_channel_idx * (output_height * output_width)   + 
+                                out_y * (output_width) + 
+                                out_x];
+            #pragma unroll
+            for (int f_i = 0; f_i < K; f_i++)
             {
-                int in_y = dout_y + ky - pad_h;
-                int in_x = dout_x + kx - pad_w;
-                if (in_y >= 0 && in_y < input_height && in_x >= 0 && in_x < input_width)
-                    acc += in[bs * (in_channels * input_height * input_width) +
-                            in_channel_idx * (input_height * input_width)   +
-                            in_y * (input_width)                            + 
-                            in_x] *
-                        dout[bs * (out_channels * output_height * output_width) +
-                            out_channel_idx * (output_height * output_width)    +
-                            dout_y * (output_width)                               + 
-                            dout_x];
-                        
+                #pragma unroll
+                for (int f_j = 0; f_j < K; f_j++)
+                {
+                    acc[f_i][f_j] += s_input_tile[(threadIdx.y + f_i) * tile_dim + (threadIdx.x + f_j)] 
+                                     * dout_i;
+                                
+                }
             }
         }
     }
 
-    if (kx < kernel_size && ky < kernel_size)
-        grad_w[out_channel_idx * (in_channels * kernel_size * kernel_size) + 
-            in_channel_idx * (kernel_size * kernel_size)                +
-            ky * (kernel_size)                                       + 
-            kx] = acc;
+    // Perform reduction in shared mem (block-level)
+    for (int ky = 0; ky < kernel_size; ky++) {
+        for (int kx = 0; kx < kernel_size; kx++) {
+            atomicAdd(&acc_reduction[ky][kx],acc[ky][kx]);
+        }
+    }
+    __syncthreads();
+
+    // Perform reduction in global memory
+    if (threadIdx.y == 0 && threadIdx.x == 0) {
+        for (int ky = 0; ky < kernel_size; ky++) {
+            for (int kx = 0; kx < kernel_size; kx++) {
+                atomicAdd(&grad_w[out_channel_idx * (in_channels * kernel_size * kernel_size) + 
+                        in_channel_idx * (kernel_size * kernel_size) + 
+                        ky * (kernel_size) + 
+                        kx], acc_reduction[ky][kx]);
+            }
+        }
+    }
 }
 
 void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding, Tensor *output)
@@ -212,7 +264,7 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
 
     conv2d_forward_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, batch_size, input_height,
                                                                        input_width, output_height, output_width,
-                                                                       in_channels, out_channels, kernel_size, 
+                                                                       in_channels, out_channels, kernel_size,
                                                                        pad_h, pad_w, d_output);
     CUDA_CHECK(cudaGetLastError());
 
@@ -251,16 +303,43 @@ void conv2d_backward_pass_w(const Tensor *input, const Tensor *dout, int padding
     CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
 
-    dim3 dimBlock(kernel_size, kernel_size, 1);
-    dim3 dimGrid(1, 1, out_channels * in_channels);
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
+    dim3 dimGrid(cdiv(output_width, BLOCK_SIZE), cdiv(output_height, BLOCK_SIZE), out_channels * in_channels);
+    int tile_dim = BLOCK_SIZE + kernel_size - 1;
+    size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
 
-    conv2d_backward_weight_kernel<<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
-                                                                       input_width, output_height, output_width,
-                                                                       in_channels, out_channels, kernel_size, 
-                                                                       pad_h, pad_w, d_grad_w);
-
+    switch (kernel_size) {
+        case 1: 
+            conv2d_backward_weight_kernel<1><<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, d_dout, batch_size, input_height,
+                                                                            input_width, output_height, output_width,
+                                                                            in_channels, out_channels, kernel_size,
+                                                                            pad_h, pad_w, d_grad_w);
+            break;
+        case 3: 
+            conv2d_backward_weight_kernel<3><<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, d_dout, batch_size, input_height,
+                                                                            input_width, output_height, output_width,
+                                                                            in_channels, out_channels, kernel_size,
+                                                                            pad_h, pad_w, d_grad_w);
+            break;
+        case 5: 
+            conv2d_backward_weight_kernel<5><<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, d_dout, batch_size, input_height,
+                                                                            input_width, output_height, output_width,
+                                                                            in_channels, out_channels, kernel_size,
+                                                                            pad_h, pad_w, d_grad_w);
+            break;
+        case 7: 
+            conv2d_backward_weight_kernel<7><<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, d_dout, batch_size, input_height,
+                                                                            input_width, output_height, output_width,
+                                                                            in_channels, out_channels, kernel_size,
+                                                                            pad_h, pad_w, d_grad_w);
+            break;
+        default:
+            fprintf(stderr, "[%s:%d] %d not supported. Only 3x3, 5x5, 7x7 are supported, so be good boy\n", __FILE__, __LINE__, kernel_size);
+            break;
+    }
+    
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK( cudaMemcpy(grad_w->data, d_dout, grad_w->size * sizeof(float), cudaMemcpyDeviceToHost) );
+    CUDA_CHECK(cudaMemcpy(grad_w->data, d_dout, grad_w->size * sizeof(float), cudaMemcpyDeviceToHost));
 
     cudaFree(d_input);
     cudaFree(d_dout);

@@ -5,7 +5,7 @@
 #include "../include/tensor.h"
 
 #define BLOCK_SIZE_FORWARD 32
-#define BLOCK_SIZE_BACKWARD_W 16
+#define BLOCK_SIZE_BACKWARD_W 16 // this is done to help occupancy due to local KxK array in backward_w
 #define COARSE_FACTOR 2
 #define MAX_FILTER_SIZE 16384
 #define MAX_K 11

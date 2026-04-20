@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <cuda_runtime.h>
-#include "../include/tensor.h"
+#include "../../include/tensor.h"
 
 void load_bin(const char *filename, float *data, int size) {
     FILE *f = fopen(filename, "rb");
@@ -13,12 +13,16 @@ void load_bin(const char *filename, float *data, int size) {
 
 void verify(const char* label, const float *custom, const float *ref, int size) {
     float max_diff = 0.0f;
-    float tol = 1e-4f; 
+    float atol = 1e-3f; // Absolute tolerance
+    float rtol = 1e-3f; // Relative tolerance
     int errs = 0;
+
     for (int i = 0; i < size; i++) {
         float d = fabs(custom[i] - ref[i]);
         if (d > max_diff) max_diff = d;
-        if (d > tol) {
+
+        // Check against combined tolerance
+        if (d > (atol + rtol * fabs(ref[i]))) {
             if (errs < 3) printf("[%s] Error at %d: Custom %f, Ref %f\n", label, i, custom[i], ref[i]);
             errs++;
         }

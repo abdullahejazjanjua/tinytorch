@@ -9,7 +9,7 @@ torch.backends.cudnn.allow_tf32 = False
 
 # Configs: (N, Cin, Hin, Win, Cout, K, P_flag)
 CONFIGS = [
-    (1, 3, 5, 5, 2, 3, 1),
+    (3, 3, 5, 5, 2, 3, 1),
     (1, 3, 5, 5, 2, 3, 0),
     (8, 128, 32, 32, 32, 7, 1),
     (4, 64, 28, 28, 32, 5, 0),

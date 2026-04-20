@@ -303,7 +303,7 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
     int output_width = output->shape[3];
 
     output->size = batch_size * out_channels * output_height * output_width;
-    
+
     float *d_input, *d_filters, *d_output;
     CUDA_CHECK(cudaMalloc((void **)&d_input, input->size * sizeof(float)));
     CUDA_CHECK(cudaMalloc((void **)&d_filters, filters->size * sizeof(float)));
@@ -328,6 +328,7 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
 
     cudaFree(d_input);
     cudaFree(d_output);
+    cudaFree(d_filters);
 }
 
 void conv2d_backward_pass_weight(const Tensor *input, const Tensor *dout, int padding, Tensor *grad_w)
@@ -442,4 +443,6 @@ void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int p
     CUDA_CHECK(cudaMemcpy(grad_input->data, d_grad_input, grad_input->size * sizeof(float), cudaMemcpyDeviceToHost));
 
     cudaFree(d_dout);
+    cudaFree(d_grad_input);
+    cudaFree(d_filters);
 }

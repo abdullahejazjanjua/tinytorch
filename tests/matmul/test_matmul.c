@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     Tensor *dA = tensor_create(2, (int[]){M, K});
     Tensor *dB = tensor_create(2, (int[]){K, N});
 
-    // ---------------- FILE LOADING (FIXED) ----------------
+    //file loading
 
     char pathA[64], pathB[64], pathC[64], pathdC[64], pathdA[64], pathdB[64];
 
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
 
     float ms_f, ms_b;
 
-    // ---------------- FORWARD ----------------
+    //forward
     matmul_forward_pass(A, B, C);
 
     cudaEventRecord(start, 0);
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&ms_f, start, stop);
 
-    // ---------------- BACKWARD ----------------
+    //backward
     matmul_backward_pass(A, B, dC, dA, dB);
 
     cudaEventRecord(start, 0);
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 
     printf("Metrics: FWD: %.3fms | BWD: %.3fms\n", ms_f/10, ms_b/10);
 
-    // ---------------- LOAD REFERENCES ----------------
+    //load references
     float *r_C  = (float*)malloc(C->size * sizeof(float));
     float *r_dA = (float*)malloc(dA->size * sizeof(float));
     float *r_dB = (float*)malloc(dB->size * sizeof(float));
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
     load_bin(pathdA, r_dA, dA->size);
     load_bin(pathdB, r_dB, dB->size);
 
-    // ---------------- VERIFY ----------------
+    //verification
     verify("Forward ", C->data, r_C, C->size);
     verify("Grad_A  ", dA->data, r_dA, dA->size);
     verify("Grad_B  ", dB->data, r_dB, dB->size);

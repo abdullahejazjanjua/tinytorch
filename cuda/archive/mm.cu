@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <cuda_runtime.h>
-#include "../include/common.cuh"
-#include "../include/tensor.h"
+#include "../../include/common.cuh"
+#include "../../include/tensor.h"
 
 __global__ void matmul_kernel_naive(
     float *A, float *B, float *C,

@@ -21,7 +21,13 @@ extern "C" {
     void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding, Tensor *output);
     void conv2d_backward_pass_weight(const Tensor *input, const Tensor *dout, int padding, Tensor *grad_w);
     void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int padding, Tensor *grad_x);
+    //matmul ops
+    Tensor* matmul(const Tensor *A, const Tensor *B);
+    void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C);
+    void matmul_backward_pass(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dA, Tensor *dB);
 #ifdef __cplusplus
 }
 #endif
 #endif
+
+

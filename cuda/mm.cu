@@ -4,7 +4,7 @@
 #include "../include/tensor.h"
 
 #define BLOCK_SIZE 16
-#define COARSE_FACTOR 2
+#define COARSE_FACTOR 4
 
 __global__ void matmul_kernel(
     float *A, float *B, float *C,
@@ -18,7 +18,7 @@ __global__ void matmul_kernel(
     int col_start = blockIdx.x * (BLOCK_SIZE * COARSE_FACTOR) + threadIdx.x;
 
     float accum[COARSE_FACTOR];
-    #pragma unroll                    //time to spam unroll... 2 CF ain't gonna hurt
+    #pragma unroll                    //time to spam unroll... 2-4 CF ain't gonna hurt
     for (int i = 0; i < COARSE_FACTOR; i++)
         accum[i] = 0.0f;
 

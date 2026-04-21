@@ -3,7 +3,7 @@
 #include "../include/common.cuh"
 #include "../include/tensor.h"
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 #define COARSE_FACTOR 2
 
 __global__ void matmul_kernel(

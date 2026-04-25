@@ -39,17 +39,25 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
             }
             input_s[threadIdx.x] = sum;
 
-            for (unsigned int stride = blockDim.x / 2; stride >= 1; stride /= 2) {
+            for (unsigned int stride = blockDim.x / 2; stride > 32; stride /= 2) {
                 __syncthreads();
                 if (threadIdx.x < stride) {
                     input_s[threadIdx.x] += input_s[threadIdx.x + stride];
                 }
             }
+            __syncthreads();
+            float val = 0.0f;
+            if (threadIdx.x < 32) {
+                val += input_s[threadIdx.x] + input_s[threadIdx.x + 32];
+                #pragma unroll
+                for (int offset = 16; offset >= 1; offset /= 2) {
+                    val += __shfl_down_sync(0xffffffff, val, offset); 
+                }
+            }
             __syncthreads(); // process all elements in the current channel
             if (threadIdx.x == 0) {
-                atomicAdd(&out[batch_idx * num_channels + channel_idx], input_s[0] / height_width);
+                atomicAdd(&out[batch_idx * num_channels + channel_idx], val / height_width);
             }
-            
             __syncthreads(); // process all the elements in the current batch
         }
     }

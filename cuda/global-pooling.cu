@@ -2,7 +2,7 @@
 #include "../include/tensor.h"
 
 #define BLOCK_DIM 256
-#define COARSE_FACTOR 1
+#define COARSE_FACTOR 4
 
 
 __global__ void global_pooling_forward_kernel(float *data, int batch_size, int num_channels, int height_width, float *out) {
@@ -15,10 +15,12 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
     unsigned int segment = COARSE_FACTOR * 2 * blockDim.x * blockIdx.y;
     unsigned int i = segment + threadIdx.x;
 
+    #pragma unroll
     for (int bs = 0; bs < COARSE_FACTOR; ++bs) {
         int batch_idx = start_batch_idx + bs;
         if (batch_idx >= batch_size) continue;
 
+        #pragma unroll
         for (int c = 0; c < COARSE_FACTOR; ++c) {
             int channel_idx = start_channel_idx + c;
             if (channel_idx >= num_channels) continue;

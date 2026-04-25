@@ -24,3 +24,24 @@ The current implementation of the 2D convolution engine is optimized for basic m
 ### 3. Numerical & Initialization Requirements
 
 * **Precision Drift**: The kernels utilize naive **FP32** accumulation. In configurations with high channel depths ($C_{in} \ge 128$) or large kernels ($K=7$), floating-point rounding errors may result in a relative difference of up to $10^{-3}$ compared to cuDNN due to different summation orders.
+
+## Global Pooling
+```C
+--- Config: Batch=32, Channels=256, H=56, W=56 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 0.5461 ms | PyTorch: 0.4157 ms
+Backward - Custom: 0.8275 ms | PyTorch: 0.4448 ms
+
+--- Config: Batch=128, Channels=512, H=28, W=28 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 1.0481 ms | PyTorch: 0.8189 ms
+Backward - Custom: 1.1399 ms | PyTorch: 0.8860 ms
+
+--- Config: Batch=256, Channels=1024, H=14, W=14 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 3.1151 ms | PyTorch: 0.7788 ms
+Backward - Custom: 2.9275 ms | PyTorch: 0.8946 ms
+```

@@ -47,9 +47,6 @@ Backward - Custom: 2.9275 ms | PyTorch: 0.8946 ms
 ```
 With warp shuffling in the forward pass:
 ```c
-Compiling inline CUDA extension... This may take a minute.
-Compilation complete.
-
 --- Config: Batch=32, Channels=256, H=56, W=56 ---
 Forward Match:  True
 Backward Match: True

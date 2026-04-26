@@ -6,8 +6,8 @@
 #define BLOCK_SIZE 32
 
 __global__ void softmax_ce_forward_kernel(float *logits, float *y, int batch_size, int num_classes, float *loss) {
-    unsigned int batch_idx = blockIdx.y * blockDim.y + threadIdx.y;
-    unsigned int class_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int batch_idx = blockIdx.x;
+    unsigned int class_idx = threadIdx.x;
     
     float exp_sum = 0.0f;
     float max_val = -FLT_MAX;
@@ -40,8 +40,8 @@ __global__ void softmax_ce_forward_kernel(float *logits, float *y, int batch_siz
 }
 
 __global__ void softmax_ce_backward_kernel(float *logits, float *y, int batch_size, int num_classes, float *grad_logits) {
-   unsigned int batch_idx = blockIdx.y * blockDim.y + threadIdx.y;
-    unsigned int class_idx = blockIdx.x * blockDim.x + threadIdx.x;
+   unsigned int batch_idx = blockIdx.x;
+   unsigned int class_idx = threadIdx.x;
     
     float exp_sum = 0.0f;
     float max_val = -FLT_MAX;
@@ -78,7 +78,7 @@ __global__ void softmax_ce_backward_kernel(float *logits, float *y, int batch_si
     if (threadIdx.x + 32 < num_classes) {
         // get register max_val and exp_sum from thread 0 into current threads registers
         float prob = expf(logits[batch_idx * num_classes + (class_idx + 32)] - max_val) / exp_sum;
-        if (threadIdx.x + 32 == y[batch_idx]) grad_logits[batch_idx * num_classes + (class_idx + 32)] = (prob - 1) / batch_size;
+        if (threadIdx.x + 32 == y[batch_idx]) grad_logits[batch_idx * num_classes + (class_idx + 32)] = (prob - 1.0f) / batch_size;
         else grad_logits[batch_idx * num_classes + (class_idx + 32)] = prob / batch_size;
     }
 }

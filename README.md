@@ -91,3 +91,28 @@ Forward  - Custom: 0.0185 ms | PyTorch: 0.0372 ms
 Backward - Custom: 0.0225 ms | PyTorch: 0.3026 ms
 
 ```
+
+# Forward pass test
+```bash
+cd tests/model-defintion
+!nvcc -arch=sm_75 model-def.cpp ../../cuda/mm.cu ../../cuda/conv.cu ../../cuda/global-pooling.cu ../../cuda/softmax-ce.cu ../../cuda/tensor-utils.cu ../../include/tensor.cpp ../../mnist-dataloader/mnist.cpp -lcurand -o out
+./out
+```
+We get the below loss, which is reasonable
+```bash
+Loss: 2.26314
+```
+Comparing with torch shows that the implementation is correct
+```bash
+
+EXHAUSTIVE GRADIENT VERIFICATION
+==================================================
+[Forward Pass (Logits).........] Max Rel Diff: 8.29e-07 | PASS ✅
+--------------------------------------------------
+[Grad Logits (Softmax-CE)......] Max Rel Diff: 2.22e-07 | PASS ✅
+[Grad FC Weights (Matmul)......] Max Rel Diff: 2.99e-07 | PASS ✅
+[Grad Pooled (Matmul A)........] Max Rel Diff: 4.17e-06 | PASS ✅
+[Grad Conv Output (Pooling)....] Max Rel Diff: 4.08e-06 | PASS ✅
+[Grad Weights (Conv)...........] Max Rel Diff: 7.07e-06 | PASS ✅
+[Grad Input (Conv).............] Max Rel Diff: 6.96e-06 | PASS ✅
+```

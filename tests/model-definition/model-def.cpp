@@ -30,7 +30,7 @@ int main() {
     int label_s[] = {4}; 
     int loss_s[] = {1};
 
-    MNISTData* train_dataset = load_dataset_in_ram("train-images-idx3-ubyte", "train-labels-idx1-ubyte", 60000);
+    MNISTData* train_dataset = load_dataset_in_ram("/content/tinytorch/train-images.idx3-ubyte", "/content/tinytorch/train-labels.idx1-ubyte", 60000);
     int* train_indices = create_indices(60000);
 
     Tensor *input = tensor_create(4, in_s, 1);
@@ -68,12 +68,12 @@ int main() {
     std::cout << "Loss: " << h_loss << std::endl;
 
     // Zero Gradients
-    cudaMemset(logits->grad, 0, logits->size * sizeof(float));
-    cudaMemset(fc_weights->grad, 0, fc_weights->size * sizeof(float));
-    cudaMemset(pooled->grad, 0, pooled->size * sizeof(float));
-    cudaMemset(conv_out->grad, 0, conv_out->size * sizeof(float));
-    cudaMemset(weights->grad, 0, weights->size * sizeof(float));
-    cudaMemset(input->grad, 0, input->size * sizeof(float));
+    cudaMemset(logits->grad->data, 0, logits->size * sizeof(float));
+    cudaMemset(fc_weights->grad->data, 0, fc_weights->size * sizeof(float));
+    cudaMemset(pooled->grad->data, 0, pooled->size * sizeof(float));
+    cudaMemset(conv_out->grad->data, 0, conv_out->size * sizeof(float));
+    cudaMemset(weights->grad->data, 0, weights->size * sizeof(float));
+    cudaMemset(input->grad->data, 0, input->size * sizeof(float));
 
     // Backward Pass
     softmax_ce_backward(logits, labels, logits->grad);            

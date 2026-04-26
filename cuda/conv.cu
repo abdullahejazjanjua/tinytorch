@@ -304,31 +304,17 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
 
     output->size = batch_size * out_channels * output_height * output_width;
 
-    float *d_input, *d_filters, *d_output;
-    CUDA_CHECK(cudaMalloc((void **)&d_input, input->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **)&d_filters, filters->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **)&d_output, output->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_filters, filters->data, filters->size * sizeof(float), cudaMemcpyHostToDevice));
-
     dim3 dimBlock(BLOCK_SIZE_FORWARD, BLOCK_SIZE_FORWARD, 1);
     dim3 dimGrid(cdiv(output_width, BLOCK_SIZE_FORWARD), cdiv(output_height, BLOCK_SIZE_FORWARD), cdiv(batch_size, COARSE_FACTOR) * cdiv(out_channels, COARSE_FACTOR));
 
     int tile_dim = BLOCK_SIZE_FORWARD + kernel_size - 1;
     size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
 
-    conv2d_forward_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_input, d_filters, batch_size, input_height,
+    conv2d_forward_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(input->data, filters->data, batch_size, input_height,
                                                                        input_width, output_height, output_width,
                                                                        in_channels, out_channels, kernel_size,
-                                                                       pad_h, pad_w, d_output);
+                                                                       pad_h, pad_w, output->data);
     CUDA_CHECK(cudaGetLastError());
-
-    CUDA_CHECK(cudaMemcpy(output->data, d_output, output->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    cudaFree(d_input);
-    cudaFree(d_output);
-    cudaFree(d_filters);
 }
 
 void conv2d_backward_pass_weight(const Tensor *input, const Tensor *dout, int padding, Tensor *grad_w)
@@ -352,54 +338,41 @@ void conv2d_backward_pass_weight(const Tensor *input, const Tensor *dout, int pa
         pad_h = (kernel_size - 1) / 2;
         pad_w = (kernel_size - 1) / 2;
     }
-
-    float *d_input, *d_dout, *d_grad_w;
-    CUDA_CHECK(cudaMalloc((void **)&d_input, (input->size * sizeof(float))));
-    CUDA_CHECK(cudaMalloc((void **)&d_dout, (dout->size * sizeof(float))));
-    CUDA_CHECK(cudaMalloc((void **)&d_grad_w, (grad_w->size * sizeof(float))));
-    CUDA_CHECK(cudaMemset(d_grad_w, 0, grad_w->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(grad_w->data, 0, grad_w->size * sizeof(float)));
 
     dim3 dimBlock(BLOCK_SIZE_BACKWARD_W, BLOCK_SIZE_BACKWARD_W, 1);
     dim3 dimGrid(cdiv(output_width, BLOCK_SIZE_BACKWARD_W), cdiv(output_height, BLOCK_SIZE_BACKWARD_W), out_channels * in_channels);
 
     switch (kernel_size) {
         case 1: 
-            conv2d_backward_weight_kernel<1><<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+            conv2d_backward_weight_kernel<1><<<dimGrid, dimBlock>>>(input->data, dout->data, batch_size, input_height,
                                                                             input_width, output_height, output_width,
                                                                             in_channels, out_channels, kernel_size,
-                                                                            pad_h, pad_w, d_grad_w);
+                                                                            pad_h, pad_w, grad_w->data);
             break;
         case 3: 
-            conv2d_backward_weight_kernel<3><<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+            conv2d_backward_weight_kernel<3><<<dimGrid, dimBlock>>>(input->data, dout->data, batch_size, input_height,
                                                                             input_width, output_height, output_width,
                                                                             in_channels, out_channels, kernel_size,
-                                                                            pad_h, pad_w, d_grad_w);
+                                                                            pad_h, pad_w, grad_w->data);
             break;
         case 5: 
-            conv2d_backward_weight_kernel<5><<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+            conv2d_backward_weight_kernel<5><<<dimGrid, dimBlock>>>(input->data, dout->data, batch_size, input_height,
                                                                             input_width, output_height, output_width,
                                                                             in_channels, out_channels, kernel_size,
-                                                                            pad_h, pad_w, d_grad_w);
+                                                                            pad_h, pad_w, grad_w->data);
             break;
         case 7: 
-            conv2d_backward_weight_kernel<7><<<dimGrid, dimBlock>>>(d_input, d_dout, batch_size, input_height,
+            conv2d_backward_weight_kernel<7><<<dimGrid, dimBlock>>>(input->data, dout->data, batch_size, input_height,
                                                                             input_width, output_height, output_width,
                                                                             in_channels, out_channels, kernel_size,
-                                                                            pad_h, pad_w, d_grad_w);
+                                                                            pad_h, pad_w, grad_w->data);
             break;
         default:
             fprintf(stderr, "[%s:%d] %d not supported. Only 3x3, 5x5, 7x7 are supported, so be good boy\n", __FILE__, __LINE__, kernel_size);
             break;
     }
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaMemcpy(grad_w->data, d_grad_w, grad_w->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    cudaFree(d_input);
-    cudaFree(d_dout);
-    cudaFree(d_grad_w);
 }
 
 void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int padding, Tensor *grad_input)
@@ -424,25 +397,12 @@ void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int p
         pad_w = (kernel_size - 1) / 2;
     }
 
-    float *d_dout, *d_filters, *d_grad_input;
-    CUDA_CHECK(cudaMalloc((void **)&d_grad_input, (grad_input->size * sizeof(float))));
-    CUDA_CHECK(cudaMalloc((void **)&d_filters, filters->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **)&d_dout, (dout->size * sizeof(float))));
-
-    CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_filters, filters->data, filters->size * sizeof(float), cudaMemcpyHostToDevice));
-
     dim3 dimBlock(BLOCK_SIZE_BACKWARD_INPUT, BLOCK_SIZE_BACKWARD_INPUT, 1);
     dim3 dimGrid(cdiv(input_width, BLOCK_SIZE_BACKWARD_INPUT), cdiv(input_height, BLOCK_SIZE_BACKWARD_INPUT), batch_size * in_channels);
     
     int tile_dim = BLOCK_SIZE_BACKWARD_INPUT + kernel_size - 1;
     size_t dynamic_shared_bytes = tile_dim * tile_dim * sizeof(float);
     
-    conv2d_backward_input_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(d_dout, d_filters, batch_size, input_height, input_width, output_height, output_width, in_channels, out_channels, kernel_size, pad_h, pad_w, d_grad_input);
+    conv2d_backward_input_kernel<<<dimGrid, dimBlock, dynamic_shared_bytes>>>(dout->data, filters->data, batch_size, input_height, input_width, output_height, output_width, in_channels, out_channels, kernel_size, pad_h, pad_w, grad_input->data);
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaMemcpy(grad_input->data, d_grad_input, grad_input->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    cudaFree(d_dout);
-    cudaFree(d_grad_input);
-    cudaFree(d_filters);
 }

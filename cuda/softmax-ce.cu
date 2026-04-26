@@ -87,62 +87,30 @@ void softmax_ce_forward(Tensor *logits, Tensor *labels, Tensor *loss) {
     int batch_size = logits->shape[0];
     int num_classes = logits->shape[1];
 
-    float *d_logits, *d_loss;
-    int *d_labels;
-
-    CUDA_CHECK(cudaMalloc((void**)&d_logits, logits->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_labels, labels->size * sizeof(int)));
-    CUDA_CHECK(cudaMalloc((void**)&d_loss, loss->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_logits, logits->data, logits->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_labels, labels->data, labels->size * sizeof(int), cudaMemcpyHostToDevice));
-
     softmax_ce_forward<<<batch_size, BLOCK_SIZE>>>(
-        d_logits,
-        d_labels, 
+        logits->data,
+        labels->data, 
         batch_size,
         num_classes,
-        d_loss
+        loss->data
     );
     
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    CUDA_CHECK(cudaMemcpy(loss->data, d_loss, loss->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CUDA_CHECK(cudaFree(d_logits));
-    CUDA_CHECK(cudaFree(d_labels));
-    CUDA_CHECK(cudaFree(d_loss));
 }
 
 void softmax_ce_backward(Tensor *logits, Tensor *labels, Tensor *grad_logits) {
     int batch_size = logits->shape[0];
     int num_classes = logits->shape[1];
 
-    float *d_logits, *d_grad_logits;
-    int *d_labels;
-
-    CUDA_CHECK(cudaMalloc((void**)&d_logits, logits->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void**)&d_labels, labels->size * sizeof(int)));
-    CUDA_CHECK(cudaMalloc((void**)&d_grad_logits, grad_logits->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_logits, logits->data, logits->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_labels, labels->data, labels->size * sizeof(int), cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemset(loss->data, 0, loss->size * sizeof(float)));
 
     softmax_ce_forward<<<batch_size, BLOCK_SIZE>>>(
-        d_logits,
-        d_labels, 
+        logits->data,
+        labels->data, 
         batch_size,
         num_classes,
-        d_grad_logits
+        grad_logits->data
     );
     
     CUDA_CHECK(cudaGetLastError());
-    CUDA_CHECK(cudaDeviceSynchronize());
-
-    CUDA_CHECK(cudaMemcpy(grad_logits->data, d_grad_logits, grad_logits->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CUDA_CHECK(cudaFree(d_logits));
-    CUDA_CHECK(cudaFree(d_labels));
-    CUDA_CHECK(cudaFree(d_grad_logits));
 }

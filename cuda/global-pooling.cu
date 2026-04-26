@@ -99,12 +99,8 @@ void global_pooling_forward_pass(Tensor *input, Tensor *output) {
     int width = input->shape[3];
     int height_width = height * width;
 
-    float *d_input, *d_output;
-    CUDA_CHECK(cudaMalloc((void **)&d_input, input->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **)&d_output, output->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_input, input->data, input->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemset(d_output, 0, output->size * sizeof(float)));
+    // intialize output to zero
+    CUDA_CHECK(cudaMemset(output->data, 0, output->size * sizeof(float)));
 
     int channel_groups = cdiv(num_channels, COARSE_FACTOR_FORWARD);
     int batch_groups = cdiv(batch_size, COARSE_FACTOR_FORWARD);
@@ -112,13 +108,8 @@ void global_pooling_forward_pass(Tensor *input, Tensor *output) {
     dim3 dimBlock(BLOCK_DIM, 1, 1);
     dim3 dimGrid(batch_groups * channel_groups, cdiv(height_width, COARSE_FACTOR_FORWARD * 2 * BLOCK_DIM), 1);
 
-    global_pooling_forward_kernel<<<dimGrid, dimBlock>>>(d_input, batch_size, num_channels, height_width, d_output);
+    global_pooling_forward_kernel<<<dimGrid, dimBlock>>>(input->data, batch_size, num_channels, height_width, output->data);
     CUDA_CHECK(cudaGetLastError());
-    
-    CUDA_CHECK(cudaMemcpy(output->data, d_output, output->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CUDA_CHECK(cudaFree(d_input));
-    CUDA_CHECK(cudaFree(d_output));
 }
 
 
@@ -128,23 +119,12 @@ void global_pooling_backward_pass(Tensor *dout, Tensor *grad_input) {
     int height = grad_input->shape[2];
     int width = grad_input->shape[3];
 
-    float *d_dout, *d_grad_input;
-    CUDA_CHECK(cudaMalloc((void **)&d_dout, dout->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc((void **)&d_grad_input, grad_input->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_dout, dout->data, dout->size * sizeof(float), cudaMemcpyHostToDevice));
-
     int channel_groups = cdiv(num_channels, COARSE_FACTOR_BACKWARD);
     int batch_groups = cdiv(batch_size, COARSE_FACTOR_BACKWARD);
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE, 1);
     dim3 dimGrid(batch_groups * channel_groups, cdiv(height, BLOCK_SIZE), cdiv(width, BLOCK_SIZE));
 
-    global_pooling_backward_kernel<<<dimGrid, dimBlock>>>(d_dout, batch_size, num_channels, height, width, d_grad_input);
+    global_pooling_backward_kernel<<<dimGrid, dimBlock>>>(dout->data, batch_size, num_channels, height, width, grad_input->data);
     CUDA_CHECK(cudaGetLastError());
-    
-    CUDA_CHECK(cudaMemcpy(grad_input->data, d_grad_input, grad_input->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    CUDA_CHECK(cudaFree(d_dout));
-    CUDA_CHECK(cudaFree(d_grad_input));
 }

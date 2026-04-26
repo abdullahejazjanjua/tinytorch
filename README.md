@@ -65,3 +65,26 @@ Backward Match: True
 Forward  - Custom: 2.1748 ms | PyTorch: 0.7822 ms
 Backward - Custom: 3.0771 ms | PyTorch: 0.8918 ms
 ```
+
+# Softmax - Fused kernel
+It is important to note that this kernel only works for num_classes 64, and likely the reason the my custom kernel is faster than torch's. Also, note that I have recomputed the softmax denominator in the backward pass instead of caching in the forward pass, the reason being that I would have change the Tensor struct to allow caching, I will leave this to the future me.
+```c
+--- Config: Batch=64, Classes=10 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 0.0168 ms | PyTorch: 0.0366 ms
+Backward - Custom: 0.0177 ms | PyTorch: 0.2828 ms
+
+--- Config: Batch=1024, Classes=31 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 0.0167 ms | PyTorch: 0.0353 ms
+Backward - Custom: 0.0169 ms | PyTorch: 0.2872 ms
+
+--- Config: Batch=2048, Classes=60 ---
+Forward Match:  True
+Backward Match: True
+Forward  - Custom: 0.0185 ms | PyTorch: 0.0372 ms
+Backward - Custom: 0.0225 ms | PyTorch: 0.3026 ms
+
+```

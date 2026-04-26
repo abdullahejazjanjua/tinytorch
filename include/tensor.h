@@ -37,7 +37,7 @@ extern "C" {
 
     Tensor* tensor_create(int ndim, int *shape, int requires_grad);
     void tensor_free(Tensor *t);
-    void tensor_to_gpu(Tensor *t)
+    void tensor_to_gpu(Tensor *t);
 
 #ifdef __cplusplus
 }

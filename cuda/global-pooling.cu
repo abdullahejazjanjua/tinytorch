@@ -51,7 +51,7 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
                 val += input_s[threadIdx.x] + input_s[threadIdx.x + 32];
                 #pragma unroll
                 for (int offset = 16; offset >= 1; offset /= 2) {
-                    val += __shfl_down_sync(0xffffffff, val, offset); 
+                    val += __shfl_down_sync(0xffffffff, val, offset); // find val at register_i + offset position
                 }
             }
             __syncthreads(); // process all elements in the current channel

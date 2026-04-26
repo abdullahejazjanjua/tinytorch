@@ -26,6 +26,8 @@ The current implementation of the 2D convolution engine is optimized for basic m
 * **Precision Drift**: The kernels utilize naive **FP32** accumulation. In configurations with high channel depths ($C_{in} \ge 128$) or large kernels ($K=7$), floating-point rounding errors may result in a relative difference of up to $10^{-3}$ compared to cuDNN due to different summation orders.
 
 ## Global Pooling
+I fixed the the issue of limiting the batch_size * num_channels by putting that in the x dimension, I won't modify the convolution code because, honestly, even I'm unsure as to how I got it to working correctly. If it works, it works, iykyk.
+
 ```C
 --- Config: Batch=32, Channels=256, H=56, W=56 ---
 Forward Match:  True

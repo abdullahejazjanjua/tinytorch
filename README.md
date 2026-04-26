@@ -69,7 +69,7 @@ Backward - Custom: 3.0771 ms | PyTorch: 0.8918 ms
 ```
 
 # Softmax-CE - Fused kernel
-It is important to note that this kernel only works for num_classes 64, and likely the reason the my custom kernel is faster than torch's. Also, note that I have recomputed the softmax denominator in the backward pass instead of caching in the forward pass, the reason being that I would have change the Tensor struct to allow caching, I will leave this to the future me. 
+It is important to note that this kernel only works for num_classes < 64, and likely the reason the my custom kernel is faster than torch's. Also, note that I have recomputed the softmax denominator in the backward pass instead of caching in the forward pass, the reason being that I would have change the Tensor struct to allow caching, I will leave this to the future me. 
 hmm, I had to write global average pooling and softmax-ce on colab because GIKI IT department can't let ensure a static IP works :(
 ```c
 --- Config: Batch=64, Classes=10 ---

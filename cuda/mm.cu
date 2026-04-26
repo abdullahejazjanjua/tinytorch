@@ -193,7 +193,7 @@ void matmul_backward_pass_A(
     const Tensor *A,
     const Tensor *B,
     const Tensor *dC,
-    Tensor *dA,
+    Tensor *dA
 )
 {
     int M = A->shape[0];

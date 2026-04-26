@@ -5,7 +5,7 @@
 
 #define BLOCK_SIZE 32
 
-__global__ void softmax_ce_forward_kernel(float *logits, int *y, int batch_size, int num_classes, float *loss) {
+__global__ void softmax_ce_forward_kernel(float *logits, float *y, int batch_size, int num_classes, float *loss) {
     unsigned int batch_idx = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned int class_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -39,7 +39,7 @@ __global__ void softmax_ce_forward_kernel(float *logits, int *y, int batch_size,
     }
 }
 
-__global__ void softmax_ce_backward_kernel(float *logits, int *y, int batch_size, int num_classes, float *grad_logits) {
+__global__ void softmax_ce_backward_kernel(float *logits, float *y, int batch_size, int num_classes, float *grad_logits) {
    unsigned int batch_idx = blockIdx.y * blockDim.y + threadIdx.y;
     unsigned int class_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -87,7 +87,7 @@ void softmax_ce_forward(Tensor *logits, Tensor *labels, Tensor *loss) {
     int batch_size = logits->shape[0];
     int num_classes = logits->shape[1];
 
-    softmax_ce_forward<<<batch_size, BLOCK_SIZE>>>(
+    softmax_ce_forward_kernel<<<batch_size, BLOCK_SIZE>>>(
         logits->data,
         labels->data, 
         batch_size,
@@ -102,9 +102,7 @@ void softmax_ce_backward(Tensor *logits, Tensor *labels, Tensor *grad_logits) {
     int batch_size = logits->shape[0];
     int num_classes = logits->shape[1];
 
-    CUDA_CHECK(cudaMemset(loss->data, 0, loss->size * sizeof(float)));
-
-    softmax_ce_forward<<<batch_size, BLOCK_SIZE>>>(
+    softmax_ce_backward_kernel<<<batch_size, BLOCK_SIZE>>>(
         logits->data,
         labels->data, 
         batch_size,

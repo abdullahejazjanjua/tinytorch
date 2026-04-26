@@ -2,17 +2,15 @@
 #define TENSOR_H
 
 typedef struct Tensor {
-    float *data;
-    int ndim;           
+    float *data; // Allocated on GPU
+    // metadata is kept on CPU
+    int ndim;
     int *shape;
     int size;   
-    
+
     int requires_grad;
     struct Tensor *grad;
 } Tensor;
-
-Tensor* tensor_create(int ndim, int *shape);
-void tensor_free(Tensor *t);
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +21,7 @@ extern "C" {
     void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int padding, Tensor *grad_x);
 
     //matmul ops
-    Tensor* matmul(const Tensor *A, const Tensor *B);
+    // Tensor* matmul(const Tensor *A, const Tensor *B);
     void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C);
     void matmul_backward_pass(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dA, Tensor *dB);
 
@@ -34,6 +32,12 @@ extern "C" {
     // softmax-ce fused kernel
     void softmax_ce_forward(Tensor *logits, Tensor *labels, Tensor *loss);
     void softmax_ce_backward(Tensor *logits, Tensor *labels, Tensor *grad_logits);
+
+    void normal_xavier_init(Tensor *weight, int in_fan, int out_fan);
+
+    Tensor* tensor_create(int ndim, int *shape, int requires_grad);
+    void tensor_free(Tensor *t);
+
 #ifdef __cplusplus
 }
 #endif

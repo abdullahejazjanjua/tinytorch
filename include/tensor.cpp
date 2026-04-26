@@ -1,28 +1,16 @@
 #include <iostream>
 #include <cstdlib>
+#include <cuda_runtime.h>
 #include "tensor.h"
 #include "common.cuh"
 
 Tensor* tensor_create(int ndim, int *shape, int requires_grad)
 {
     Tensor *t = (Tensor*) malloc(sizeof(Tensor));
-    if (t == nullptr) {
-        std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: Failed to allocate struct Tensor of shape: ";
-        for (int i = 0; i < ndim; i++) {
-            std::cerr << shape[i] << " ";
-        }
-        std::cerr << std::endl;
-        return nullptr;
-    }
+    if (t == nullptr) return nullptr;
 
     t->ndim = ndim;
     t->shape = (int*) malloc(ndim * sizeof(int));
-    if (t->shape == nullptr) {
-        std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: Failed to allocate shapes array" << std::endl;
-        free(t);
-        return nullptr;
-    }
-
     int total_size = 1;
     for (int i = 0; i < ndim; i++) {
         t->shape[i] = shape[i];
@@ -31,33 +19,59 @@ Tensor* tensor_create(int ndim, int *shape, int requires_grad)
 
     t->size = total_size;
     t->requires_grad = requires_grad;
+    t->on_gpu = 0;
     t->grad = nullptr;
 
-    CUDA_CHECK(cudaMalloc((void**)&t->data, total_size * sizeof(float)));
-    if (requires_grad)
-        t->grad = tensor_create(ndim, shape, 0);
-        
-    
+    t->data = (float*) malloc(total_size * sizeof(float));
     if (t->data == nullptr) {
-        std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: Failed to allocate data array on GPU" << std::endl;
         free(t->shape);
         free(t);
         return nullptr;
     }
+
+    if (requires_grad) {
+        t->grad = tensor_create(ndim, shape, 0);
+    }
+        
     return t;
 }
 
 void tensor_free(Tensor *t) {
     if (t) {
-        if (t->data) {
-            cudaFree(t->data);
-        }
         if (t->grad) {
             tensor_free(t->grad);
+        }
+        if (t->data) {
+            if (t->on_gpu)
+                cudaFree(t->data);
+            else 
+                free(t->data);
         }
         if (t->shape) {
             free(t->shape);
         }
         free(t);
     }
+}
+
+void tensor_to_gpu(Tensor *t) {
+    if (!t || !t->data || t->on_gpu) return;
+
+    float *d_data = nullptr;
+    CUDA_CHECK(cudaMalloc((void**)&d_data, t->size * sizeof(float)));
+    CUDA_CHECK(cudaMemcpy(d_data, t->data, t->size * sizeof(float), cudaMemcpyHostToDevice));
+
+    if (t->grad && t->grad->data) {
+        float *d_grad = nullptr;
+        CUDA_CHECK(cudaMalloc((void**)&d_grad, t->grad->size * sizeof(float)));
+        CUDA_CHECK(cudaMemcpy(d_grad, t->grad->data, t->grad->size * sizeof(float), cudaMemcpyHostToDevice));
+        
+        free(t->grad->data);
+        t->grad->data = d_grad;
+        t->grad->on_gpu = 1; 
+    }
+
+    free(t->data);
+    t->data = d_data;
+    t->on_gpu = 1; 
 }

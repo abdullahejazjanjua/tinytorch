@@ -2,12 +2,12 @@
 #define TENSOR_H
 
 typedef struct Tensor {
-    float *data; // Allocated on GPU
-    // metadata is kept on CPU
+    float *data;
     int ndim;
     int *shape;
     int size;   
 
+    int on_gpu;
     int requires_grad;
     struct Tensor *grad;
 } Tensor;
@@ -37,6 +37,7 @@ extern "C" {
 
     Tensor* tensor_create(int ndim, int *shape, int requires_grad);
     void tensor_free(Tensor *t);
+    void tensor_to_gpu(Tensor *t)
 
 #ifdef __cplusplus
 }

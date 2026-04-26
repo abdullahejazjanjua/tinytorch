@@ -61,32 +61,6 @@ __global__ void matmul_kernel(
     }
 }
 
-void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C)
-{
-    int M = A->shape[0];
-    int K = A->shape[1];
-    int N = B->shape[1];
-
-    float *d_A, *d_B, *d_C;
-    CUDA_CHECK(cudaMalloc(&d_A, A->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_B, B->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_C, C->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_A, A->data, A->size * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_B, B->data, B->size * sizeof(float), cudaMemcpyHostToDevice));
-
-    dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 gridDim(cdiv(N, BLOCK_SIZE * COARSE_FACTOR), cdiv(M, BLOCK_SIZE));
-
-    matmul_kernel<<<gridDim, blockDim>>>(d_A, d_B, d_C, M, N, K);
-    CUDA_CHECK(cudaGetLastError());
-
-    CUDA_CHECK(cudaMemcpy(C->data, d_C, C->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
-}
 
 // dA = dC x Bt ... tiling over N to fix strided B access from naive imp
 __global__ void matmul_backward_A_kernel(
@@ -202,7 +176,39 @@ __global__ void matmul_backward_B_kernel(
     }
 }
 
-void matmul_backward_pass(
+void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C)
+{
+    int M = A->shape[0];
+    int K = A->shape[1];
+    int N = B->shape[1];
+
+    dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 gridDim(cdiv(N, BLOCK_SIZE * COARSE_FACTOR), cdiv(M, BLOCK_SIZE));
+
+    matmul_kernel<<<gridDim, blockDim>>>(A->data, B->data, C->data, M, N, K);
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void matmul_backward_pass_A(
+    const Tensor *A,
+    const Tensor *B,
+    const Tensor *dC,
+    Tensor *dA,
+)
+{
+    int M = A->shape[0];
+    int K = A->shape[1];
+    int N = B->shape[1];
+
+    dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 gridA(cdiv(K, BLOCK_SIZE * COARSE_FACTOR), cdiv(M, BLOCK_SIZE));
+    matmul_backward_A_kernel<<<gridA, blockDim>>>(dC->data, B->data, dA->data, M, N, K);
+    CUDA_CHECK(cudaGetLastError());
+
+}
+
+
+void matmul_backward_pass_B(
     const Tensor *A,
     const Tensor *B,
     const Tensor *dC,
@@ -214,33 +220,9 @@ void matmul_backward_pass(
     int K = A->shape[1];
     int N = B->shape[1];
 
-    float *d_A, *d_B, *d_dC, *d_dA, *d_dB;
-    CUDA_CHECK(cudaMalloc(&d_A,  A->size  * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_B,  B->size  * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_dC, dC->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_dA, dA->size * sizeof(float)));
-    CUDA_CHECK(cudaMalloc(&d_dB, dB->size * sizeof(float)));
-
-    CUDA_CHECK(cudaMemcpy(d_A,  A->data,  A->size  * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_B,  B->data,  B->size  * sizeof(float), cudaMemcpyHostToDevice));
-    CUDA_CHECK(cudaMemcpy(d_dC, dC->data, dC->size * sizeof(float), cudaMemcpyHostToDevice));
-
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
-
-    dim3 gridA(cdiv(K, BLOCK_SIZE * COARSE_FACTOR), cdiv(M, BLOCK_SIZE));
-    matmul_backward_A_kernel<<<gridA, blockDim>>>(d_dC, d_B, d_dA, M, N, K);
-
     dim3 gridB(cdiv(N, BLOCK_SIZE * COARSE_FACTOR), cdiv(K, BLOCK_SIZE));
-    matmul_backward_B_kernel<<<gridB, blockDim>>>(d_A, d_dC, d_dB, M, N, K);
+    matmul_backward_B_kernel<<<gridB, blockDim>>>(A->data, dC->data, dB->data, M, N, K);
 
     CUDA_CHECK(cudaGetLastError());
-
-    CUDA_CHECK(cudaMemcpy(dA->data, d_dA, dA->size * sizeof(float), cudaMemcpyDeviceToHost));
-    CUDA_CHECK(cudaMemcpy(dB->data, d_dB, dB->size * sizeof(float), cudaMemcpyDeviceToHost));
-
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_dC);
-    cudaFree(d_dA);
-    cudaFree(d_dB);
 }

@@ -36,6 +36,13 @@ int main() {
     Tensor *labels = tensor_create(1, label_s, 0);
     Tensor *loss = tensor_create(1, loss_s, 0);
 
+    tensor_to_gpu(input);
+    tensor_to_gpu(weights);
+    tensor_to_gpu(conv_out);
+    tensor_to_gpu(pooled);
+    tensor_to_gpu(labels);
+    tensor_to_gpu(loss);
+
     fill_random(input);
     float label_val = 3.0f;
     float* h_labels = (float*)malloc(sizeof(float));

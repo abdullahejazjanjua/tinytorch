@@ -25,6 +25,8 @@ int main() {
     int filt_s[] = {8, 1, 3, 3}; 
     int out_s[] = {4, 8, 26, 26}; 
     int pool_s[] = {4, 8}; 
+    int fc_w_s[] = {8, 10}; 
+    int logits_s[] = {4, 10}; 
     int label_s[] = {4}; 
     int loss_s[] = {1};
 
@@ -35,44 +37,64 @@ int main() {
     Tensor *weights = tensor_create(4, filt_s, 1);
     Tensor *conv_out = tensor_create(4, out_s, 1);
     Tensor *pooled = tensor_create(2, pool_s, 1);
+    Tensor *fc_weights = tensor_create(2, fc_w_s, 1);
+    Tensor *logits = tensor_create(2, logits_s, 1);
     Tensor *labels = tensor_create(1, label_s, 0);
     Tensor *loss = tensor_create(1, loss_s, 0);
 
-    // Load actual data into host tensors
     load_batch_to_tensor(train_dataset, 4, 8, train_indices, input, labels);
 
-    // Move to device
     tensor_to_gpu(input);
     tensor_to_gpu(weights);
     tensor_to_gpu(conv_out);
     tensor_to_gpu(pooled);
+    tensor_to_gpu(fc_weights);
+    tensor_to_gpu(logits);
     tensor_to_gpu(labels);
     tensor_to_gpu(loss);
 
-    // Initialize weights
     normal_xavier_init(weights, 9, 72);
+    normal_xavier_init(fc_weights, 8, 10);
 
     // Forward Pass
     conv2d_forward_pass(input, weights, 0, conv_out);
     global_pooling_forward_pass(conv_out, pooled);
-    softmax_ce_forward(pooled, labels, loss);
+    matmul_forward_pass(pooled, fc_weights, logits);
+    softmax_ce_forward(logits, labels, loss);
     cudaDeviceSynchronize();
 
+    float h_loss;
+    cudaMemcpy(&h_loss, loss->data, sizeof(float), cudaMemcpyDeviceToHost);
+    std::cout << "Loss: " << h_loss << std::endl;
+
+    // Zero Gradients
+    cudaMemset(logits->grad, 0, logits->size * sizeof(float));
+    cudaMemset(fc_weights->grad, 0, fc_weights->size * sizeof(float));
+    cudaMemset(pooled->grad, 0, pooled->size * sizeof(float));
+    cudaMemset(conv_out->grad, 0, conv_out->size * sizeof(float));
+    cudaMemset(weights->grad, 0, weights->size * sizeof(float));
+    cudaMemset(input->grad, 0, input->size * sizeof(float));
+
     // Backward Pass
-    softmax_ce_backward(pooled, labels, pooled->grad);            
+    softmax_ce_backward(logits, labels, logits->grad);            
+    matmul_backward_pass_A(pooled, fc_weights, logits->grad, pooled->grad);
+    matmul_backward_pass_B(pooled, fc_weights, logits->grad, pooled->grad, fc_weights->grad);
     global_pooling_backward_pass(pooled->grad, conv_out->grad);   
     conv2d_backward_pass_weight(input, conv_out->grad, 0, weights->grad);
     conv2d_backward_pass_input(weights, conv_out->grad, 0, input->grad);
     cudaDeviceSynchronize();
 
-    // Exhaustive Export
+    // Export Tensors
     save_tensor("input.bin", input);
     save_tensor("weights.bin", weights);
+    save_tensor("fc_weights.bin", fc_weights);
     save_tensor("labels.bin", labels);
-    save_tensor("fwd_logits.bin", pooled);
+    save_tensor("fwd_logits.bin", logits);
     
-    // Intermediate Gradients
-    save_tensor("grad_logits.bin", pooled->grad);       
+    // Export Gradients
+    save_tensor("grad_logits.bin", logits->grad);       
+    save_tensor("grad_fc_weights.bin", fc_weights->grad);
+    save_tensor("grad_pooled.bin", pooled->grad);
     save_tensor("grad_conv_out.bin", conv_out->grad);   
     save_tensor("grad_weights.bin", weights->grad);     
     save_tensor("grad_input.bin", input->grad);         
@@ -81,6 +103,8 @@ int main() {
     tensor_free(weights); 
     tensor_free(conv_out);
     tensor_free(pooled); 
+    tensor_free(fc_weights);
+    tensor_free(logits);
     tensor_free(labels); 
     tensor_free(loss);
 

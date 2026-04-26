@@ -8,6 +8,8 @@
 # MacOs shit
 .DS_Store
 
+# data
+data
 # Python ignore files
 # Byte-compiled / optimized / DLL files
 __pycache__/

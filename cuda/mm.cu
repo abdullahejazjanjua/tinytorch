@@ -212,7 +212,6 @@ void matmul_backward_pass_B(
     const Tensor *A,
     const Tensor *B,
     const Tensor *dC,
-    Tensor *dA,
     Tensor *dB
 )
 {

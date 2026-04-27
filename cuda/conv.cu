@@ -279,30 +279,14 @@ void conv2d_forward_pass(const Tensor *input, const Tensor *filters, int padding
 
     int out_channels = filters->shape[0];
     int kernel_size = filters->shape[2];
+    int output_height = output->shape[2];
+    int output_width  = output->shape[3];
 
-    int pad_h = 0, pad_w = 0;
-    if (padding)
-    {
-        output->shape[2] = input_height;
-        output->shape[3] = input_width;
-
-        pad_h = (kernel_size - 1) / 2;
-        pad_w = (kernel_size - 1) / 2;
-    }
-    else
-    {
-        output->shape[2] = input_height - kernel_size + 1;
-        output->shape[3] = input_width - kernel_size + 1;
-        assert(output->shape[2] > 0 && output->shape[3] > 0);
-    }
+    int pad_h = padding ? (kernel_size - 1) / 2 : 0;
+    int pad_w = padding ? (kernel_size - 1) / 2 : 0;
 
     output->shape[0] = batch_size;
     output->shape[1] = out_channels;
-
-    int output_height = output->shape[2];
-    int output_width = output->shape[3];
-
-    output->size = batch_size * out_channels * output_height * output_width;
 
     dim3 dimBlock(BLOCK_SIZE_FORWARD, BLOCK_SIZE_FORWARD, 1);
     dim3 dimGrid(cdiv(output_width, BLOCK_SIZE_FORWARD), cdiv(output_height, BLOCK_SIZE_FORWARD), cdiv(batch_size, COARSE_FACTOR) * cdiv(out_channels, COARSE_FACTOR));

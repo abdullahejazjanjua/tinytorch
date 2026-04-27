@@ -26,7 +26,7 @@ extern "C" {
     //matmul ops
     void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C);
     void matmul_backward_pass_A(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dA);
-    void matmul_backward_pass_B(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dA, Tensor *dB);
+    void matmul_backward_pass_B(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dB);
 
     // global average pooling
     void global_pooling_forward_pass(Tensor *input, Tensor *output);

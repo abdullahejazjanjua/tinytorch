@@ -17,38 +17,48 @@ void conv2d_functional_backward(Node *node, Tensor *dout) {
 }
 
 
-Tensor* conv2d_functional_forward(Tensor *input, Tensor *weights, int padding, int ndim, int *expected_shape, int requires_grad) {
-    Tensor *output = tensor_create(ndim, expected_shape, requires_grad, 1); // create on gpu
+Tensor* conv2d_functional_forward(Tensor *input, Tensor *weights, int padding, int requires_grad) {
 
-    // call the forward function
+    int batch_size = input->shape[0];
+    int out_channels = weights->shape[0];
+    int kernel_size = weights->shape[2];
+    int in_h = input->shape[2];
+    int in_w = input->shape[3];
+
+    int out_h, out_w;
+    if (padding) {
+        out_h = in_h;
+        out_w = in_w;
+    } else {
+        out_h = in_h - kernel_size + 1;
+        out_w = in_w - kernel_size + 1;
+    }
+
+    int expected_shape[] = {batch_size, out_channels, out_h, out_w};
+    
+    Tensor *output = tensor_create(4, expected_shape, requires_grad, 1);
+
     conv2d_forward_pass(input, weights, padding, output);
 
     if (output->requires_grad) {
         Node *_prev = (Node *) malloc(sizeof(Node));
         if (_prev == nullptr) {
-            std :: cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: couldn't allocate space for Node\n";
+            std::cerr << "Error: Node allocation failed\n";
             return nullptr;
         }
 
         _prev->inputs = (Tensor**) malloc(2 * sizeof(Tensor*));
-        if (_prev->inputs == nullptr) {
-            std :: cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: couldn't allocate space for pointer to inputs\n";
-            return nullptr;
-        }
         _prev->inputs[0] = input;
         _prev->inputs[1] = weights;
         _prev->num_inputs = 2;
 
         _prev->ctx = (void**) malloc(sizeof(void*));
-        if (_prev->ctx == nullptr) {
-            std :: cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: couldn't allocate space for pointer to ctx\n";
-            return nullptr;
-        }
         _prev->ctx[0] = (void*) (intptr_t) padding;
         _prev->num_ctx = 1;
 
         _prev->backward = conv2d_functional_backward;
         output->prev = _prev;
     }
+    
     return output;
 }

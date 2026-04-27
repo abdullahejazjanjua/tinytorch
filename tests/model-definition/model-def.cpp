@@ -50,14 +50,14 @@ int main() {
     MNISTData* train_dataset = load_dataset_in_ram("../../data/train-images.idx3-ubyte", "../../data/train-labels.idx1-ubyte", 60000);
     int* train_indices = create_indices(60000);
 
-    Tensor *input = tensor_create(4, in_s, 1);
-    Tensor *weights = tensor_create(4, filt_s, 1);
-    Tensor *conv_out = tensor_create(4, out_s, 1);
-    Tensor *pooled = tensor_create(2, pool_s, 1);
-    Tensor *fc_weights = tensor_create(2, fc_w_s, 1);
-    Tensor *logits = tensor_create(2, logits_s, 1);
-    Tensor *labels = tensor_create(1, label_s, 0);
-    Tensor *loss = tensor_create(1, loss_s, 0);
+    Tensor *input = tensor_create(4, in_s, 1, 1);
+    Tensor *weights = tensor_create(4, filt_s, 1, 1);
+    Tensor *conv_out = tensor_create(4, out_s, 1, 1);
+    Tensor *pooled = tensor_create(2, pool_s, 1, 1);
+    Tensor *fc_weights = tensor_create(2, fc_w_s, 1, 1);
+    Tensor *logits = tensor_create(2, logits_s, 1, 1);
+    Tensor *labels = tensor_create(1, label_s, 0, 1);
+    Tensor *loss = tensor_create(1, loss_s, 0, 1);
 
     load_batch_to_tensor(train_dataset, 4, 8, train_indices, input, labels);
 

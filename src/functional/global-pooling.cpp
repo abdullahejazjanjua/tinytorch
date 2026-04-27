@@ -8,7 +8,6 @@ void global_pooling_functional_backward(Node *node, Tensor *dout) {
     global_pooling_backward_pass(dout, input->grad);
 }
 
-
 Tensor* global_pooling_functional_forward(Tensor *input, int ndim, int *expected_shape, int requires_grad) {
     Tensor *output = tensor_create(ndim, expected_shape, requires_grad, 1); // create on gpu
 

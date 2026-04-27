@@ -30,7 +30,8 @@ Tensor* tensor_create(int ndim, int *shape, int requires_grad, int on_gpu)
     t->on_gpu = on_gpu;
     t->grad = nullptr;
     t->data = nullptr;
-
+    t->prev = nullptr;
+    
     if (on_gpu) {
         CUDA_CHECK( cudaMalloc((void**)&t->data, total_size * sizeof(float)) );
     } else {

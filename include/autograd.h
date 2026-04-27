@@ -16,4 +16,6 @@ typedef struct Node {
     backward_fn backward;
 } Node;
 
+void backward(Tensor *t);
+
 #endif

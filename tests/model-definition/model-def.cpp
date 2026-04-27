@@ -2,7 +2,10 @@
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <cfloat>
 #include <cuda_runtime.h>
+
+#include "../../include/common.cuh"
 #include "../../mnist-dataloader/mnist.h"
 #include "../../include/tensor.h"
 
@@ -19,6 +22,20 @@ void save_tensor(const char* filename, Tensor* t) {
     free(host_data);
 }
 
+int argmax(float *f, int size) {
+    float max = -FLT_MAX;
+    int max_idx = 0;
+
+    for (int i = 0; i < size; i++) {
+        if (f[i] > max) {
+            max = f[i];
+            max_idx = i;
+        }
+    }
+
+    return max_idx;
+}
+
 int main() {
     srand(42); 
     int in_s[] = {4, 1, 28, 28}; 
@@ -30,7 +47,7 @@ int main() {
     int label_s[] = {4}; 
     int loss_s[] = {1};
 
-    MNISTData* train_dataset = load_dataset_in_ram("/content/tinytorch/train-images.idx3-ubyte", "/content/tinytorch/train-labels.idx1-ubyte", 60000);
+    MNISTData* train_dataset = load_dataset_in_ram("../../data/train-images.idx3-ubyte", "../../data/train-labels.idx1-ubyte", 60000);
     int* train_indices = create_indices(60000);
 
     Tensor *input = tensor_create(4, in_s, 1);
@@ -56,7 +73,7 @@ int main() {
     normal_xavier_init(weights, 9, 72);
     normal_xavier_init(fc_weights, 8, 10);
 
-    // Forward Pass
+    std :: cout << "Starting forward pass...\n";
     conv2d_forward_pass(input, weights, 0, conv_out);
     global_pooling_forward_pass(conv_out, pooled);
     matmul_forward_pass(pooled, fc_weights, logits);
@@ -64,8 +81,27 @@ int main() {
     cudaDeviceSynchronize();
 
     float h_loss;
-    cudaMemcpy(&h_loss, loss->data, sizeof(float), cudaMemcpyDeviceToHost);
+    CUDA_CHECK( cudaMemcpy(&h_loss, loss->data, sizeof(float), cudaMemcpyDeviceToHost) );
     std::cout << "Loss: " << h_loss << std::endl;
+
+    float *h_logits = nullptr;
+    h_logits = (float*) malloc(logits->size * sizeof(float));
+    CUDA_CHECK(cudaMemcpy(h_logits, logits->data, logits->size * sizeof(float), cudaMemcpyDeviceToHost));
+
+    float *h_labels = nullptr;
+    h_labels = (float*) malloc(labels->size * sizeof(float));
+    CUDA_CHECK(cudaMemcpy(h_labels, labels->data, labels->size * sizeof(float), cudaMemcpyDeviceToHost));
+    for (int i = 0; i < logits->shape[0]; i++) {
+        std:: cout << "Batch: " << i << "\n";
+        std :: cout << "    ";
+        for (int j = 0; j < logits->shape[1]; j++) {
+            std :: cout << h_logits[i * logits->shape[1] + j];
+        }
+        std :: cout << "\n";
+        int pred_label = argmax(h_logits + (i * logits->shape[1]), logits->shape[1]);
+        std :: cout << "    Prediciton: " << pred_label << " Ground Truth: " << h_labels[i] << "\n";
+    }
+    std :: cout << "\n";
 
     // Zero Gradients
     cudaMemset(logits->grad->data, 0, logits->size * sizeof(float));
@@ -75,7 +111,7 @@ int main() {
     cudaMemset(weights->grad->data, 0, weights->size * sizeof(float));
     cudaMemset(input->grad->data, 0, input->size * sizeof(float));
 
-    // Backward Pass
+    std :: cout << "Starting backward pass...\n";
     softmax_ce_backward(logits, labels, logits->grad);            
     matmul_backward_pass_A(pooled, fc_weights, logits->grad, pooled->grad);
     matmul_backward_pass_B(pooled, fc_weights, logits->grad, pooled->grad, fc_weights->grad);

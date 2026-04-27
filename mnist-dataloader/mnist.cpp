@@ -25,7 +25,7 @@ void shuffle_indices(int *indices, int num_images) {
     }
 }
 
-MNISTData* load_dataset_in_ram(char *images_path, char *labels_path, int num_images) {
+MNISTData* load_dataset_in_ram(const char *images_path, const char *labels_path, int num_images) {
     MNISTData* data = (MNISTData*) malloc(sizeof(MNISTData));    
     data->images = (unsigned char*) malloc(num_images * IMAGE_SIZE * sizeof(unsigned char));
     data->labels = (unsigned char*) malloc(num_images * sizeof(unsigned char));

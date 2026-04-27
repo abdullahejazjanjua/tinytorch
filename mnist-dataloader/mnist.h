@@ -12,6 +12,6 @@ struct MNISTData {
 
 int* create_indices(int num_images);
 void free_mnist_data(MNISTData* data);
-MNISTData* load_dataset_in_ram(char *images_path, char *labels_path, int num_images);
+MNISTData* load_dataset_in_ram(const char *images_path, const char *labels_path, int num_images);
 void load_batch_to_tensor(MNISTData *dataset, int batch_start, int batch_end, int *indices, Tensor *img_batch, Tensor *labels_batch);
 #endif

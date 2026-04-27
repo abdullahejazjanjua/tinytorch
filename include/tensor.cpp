@@ -12,7 +12,7 @@ void inline Malloc(float *f, int size, const char *msg) {
     }
 }
 
-Tensor* tensor_create(int ndim, int *shape, int requires_grad)
+Tensor* tensor_create(int ndim, int *shape, int requires_grad, int on_gpu)
 {
     Tensor *t = (Tensor*) malloc(sizeof(Tensor));
     if (t == nullptr) return nullptr;
@@ -27,18 +27,23 @@ Tensor* tensor_create(int ndim, int *shape, int requires_grad)
 
     t->size = total_size;
     t->requires_grad = requires_grad;
-    t->on_gpu = 0;
+    t->on_gpu = on_gpu;
     t->grad = nullptr;
+    t->data = nullptr;
 
-    t->data = (float*) malloc(total_size * sizeof(float));
-    if (t->data == nullptr) {
-        free(t->shape);
-        free(t);
-        return nullptr;
+    if (on_gpu) {
+        CUDA_CHECK( cudaMalloc((void**)&t->data, total_size * sizeof(float)) );
+    } else {
+        t->data = (float*) malloc(total_size * sizeof(float));
+        if (t->data == nullptr) {
+            free(t->shape);
+            free(t);
+            return nullptr;
+        }
     }
 
     if (requires_grad) {
-        t->grad = tensor_create(ndim, shape, 0);
+        t->grad = tensor_create(ndim, shape, 0, on_gpu);
     }
         
     return t;

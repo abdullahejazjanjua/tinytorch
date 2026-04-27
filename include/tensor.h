@@ -1,11 +1,14 @@
 #ifndef TENSOR_H
 #define TENSOR_H
 
+struct Node;
+
 typedef struct Tensor {
     float *data;
     int ndim;
     int *shape;
     int size;   
+    Node *prev;
 
     int on_gpu;
     int requires_grad;
@@ -35,9 +38,10 @@ extern "C" {
 
     void normal_xavier_init(Tensor *weight, int in_fan, int out_fan);
 
-    Tensor* tensor_create(int ndim, int *shape, int requires_grad);
+    Tensor* tensor_create(int ndim, int *shape, int requires_grad, int on_gpu);
     void tensor_free(Tensor *t);
     void tensor_to_gpu(Tensor *t);
+    void tensor_to_cpu(Tensor *t);
 
 #ifdef __cplusplus
 }

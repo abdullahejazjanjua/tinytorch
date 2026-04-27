@@ -116,3 +116,6 @@ EXHAUSTIVE GRADIENT VERIFICATION
 [Grad Weights (Conv)...........] Max Rel Diff: 7.07e-06 | PASS ✅
 [Grad Input (Conv).............] Max Rel Diff: 6.96e-06 | PASS ✅
 ```
+
+# Autograd engine implemented
+The engine is completely implement, look [here](tests/autograd/exhaustive-autograd-test.cpp) for how it is. The topology sort is implemented [here](src/autograd/backward.cpp).

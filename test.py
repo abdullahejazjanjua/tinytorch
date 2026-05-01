@@ -77,8 +77,8 @@ def test_data():
     indices = data.create_indices(60000)
     np.random.shuffle(indices)
     
-    img_batch = base.tensor_create([32, 784], 0, 0)
-    label_batch = base.tensor_create([32, 10], 0, 0)
+    img_batch = base.tensor_create([32, 1, 28, 28], 0, 0)
+    label_batch = base.tensor_create([32], 0, 0)
 
     data.load_batch_to_tensor(dataset, 0, 32, indices, img_batch, label_batch)
     print(label_batch.data)

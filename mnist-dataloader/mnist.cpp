@@ -76,6 +76,7 @@ void load_batch_to_tensor(MNISTData *dataset, int batch_start, int batch_end, in
     int num_channels = img_batch->shape[1];
     int image_height = img_batch->shape[2];
     int image_width = img_batch->shape[3];;
+    
     int local_batch = 0;
     for (int bs = batch_start; bs < batch_end; bs++) {
         int img_id = indices[bs];

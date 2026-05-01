@@ -24,7 +24,7 @@ void test_exhaustive_network() {
     // 3. Initialize Layers
     Conv2D conv_layer(1, 2, 3, 0, 1); 
     GlobalPooling pool_layer(1);
-    Linear linear_layer(2, 2, 1);     
+    Linear linear_layer(2, 2, 0, 1);     
     CrossEntropy ce_layer(1);
 
     // Initialize Conv2D weights to 1.0f (Shape: [2, 1, 3, 3] -> 18 elements)

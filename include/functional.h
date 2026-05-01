@@ -13,11 +13,15 @@ Tensor* conv2d_functional_forward(Tensor *input, Tensor *weights, int padding, i
 void conv2d_functional_backward(Node *node, Tensor *dout);
 
 // linear layer wrappers
-Tensor* linear_functional_forward(Tensor *input, Tensor *weights, int requires_grad);
+Tensor* linear_functional_forward(Tensor *input, Tensor *weights, Tensor *bias, int requires_grad);
 void linear_functional_backward(Node *node, Tensor *dout);
 
 // cross-entropy layer wrappers
 Tensor* cross_entropy_functional_forward(Tensor *logits, Tensor *labels, int ndim, int *expected_shape, int requires_grad);
 void cross_entropy_functional_backward(Node *node, Tensor *dout);
+
+// relu wrappers
+Tensor* relu_functional_forward(Tensor *input, int requires_grad);
+void relu_functional_backward(Node *node, Tensor *dout);
 
 #endif

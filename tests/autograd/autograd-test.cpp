@@ -24,7 +24,7 @@ void test_linear_ce_backward() {
     cudaMemcpy(labels->data, h_labels, 2 * sizeof(float), cudaMemcpyHostToDevice);
 
     // 3. Initialize Layers
-    Linear linear_layer(in_features, num_classes, 1);
+    Linear linear_layer(in_features, num_classes, 0, 1);
     CrossEntropy ce_layer(1);
 
     // Explicitly initialize weights to 1.0f for deterministic gradient verification

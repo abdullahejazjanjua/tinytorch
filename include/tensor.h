@@ -24,9 +24,10 @@ extern "C" {
     void conv2d_backward_pass_input(const Tensor *filters, const Tensor *dout, int padding, Tensor *grad_x);
 
     //matmul ops
-    void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C);
+    void matmul_forward_pass(const Tensor *A, const Tensor *B, const Tensor *bias, Tensor *C);
     void matmul_backward_pass_A(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dA);
     void matmul_backward_pass_B(const Tensor *A, const Tensor *B, const Tensor *dC, Tensor *dB);
+    void matmul_backward_pass_bias(const Tensor *dC, Tensor *db);
 
     // global average pooling
     void global_pooling_forward_pass(Tensor *input, Tensor *output);
@@ -35,6 +36,10 @@ extern "C" {
     // softmax-ce fused kernel
     void softmax_ce_forward(Tensor *logits, Tensor *labels, Tensor *loss);
     void softmax_ce_backward(Tensor *logits, Tensor *labels, Tensor *grad_logits);
+
+    // relu
+    void relu_forward_pass(const Tensor *input, Tensor *output);
+    void relu_backward_pass(const Tensor *input, const Tensor *dout, Tensor *grad_in);
 
     void normal_xavier_init(Tensor *weight, int in_fan, int out_fan);
 

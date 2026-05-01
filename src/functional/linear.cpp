@@ -13,9 +13,15 @@ void linear_functional_backward(Node *node, Tensor *dout) {
     if (weights->requires_grad) {
         matmul_backward_pass_B(input, weights, dout, weights->grad);
     }
+    if (node->num_inputs == 3) {
+        Tensor *bias = node->inputs[2];
+        if (bias && bias->requires_grad) {
+            matmul_backward_pass_bias(dout, bias->grad);
+        }
+    }
 }
 
-Tensor* linear_functional_forward(Tensor *input, Tensor *weights, int requires_grad) {
+Tensor* linear_functional_forward(Tensor *input, Tensor *weights, Tensor *bias, int requires_grad) {
 
     int batch_size = input->shape[0];
     int in_features = weights->shape[0];
@@ -26,7 +32,7 @@ Tensor* linear_functional_forward(Tensor *input, Tensor *weights, int requires_g
     
     Tensor *output = tensor_create(2, expected_shape, requires_grad, 1);
 
-    matmul_forward_pass(input, weights, output);
+    matmul_forward_pass(input, weights, bias, output);
 
     if (output->requires_grad) {
         Node *_prev = (Node *) malloc(sizeof(Node));
@@ -35,10 +41,12 @@ Tensor* linear_functional_forward(Tensor *input, Tensor *weights, int requires_g
             return nullptr;
         }
 
-        _prev->inputs = (Tensor**) malloc(2 * sizeof(Tensor*));
+        int num_inputs = (bias != nullptr) ? 3 : 2;
+        _prev->inputs = (Tensor**) malloc(num_inputs * sizeof(Tensor*));
         _prev->inputs[0] = input;
         _prev->inputs[1] = weights;
-        _prev->num_inputs = 2;
+        if (bias != nullptr) _prev->inputs[2] = bias;
+        _prev->num_inputs = num_inputs;
 
         _prev->ctx = nullptr;
         _prev->num_ctx = 0;

@@ -76,7 +76,7 @@ int main() {
     std :: cout << "Starting forward pass...\n";
     conv2d_forward_pass(input, weights, 0, conv_out);
     global_pooling_forward_pass(conv_out, pooled);
-    matmul_forward_pass(pooled, fc_weights, logits);
+    matmul_forward_pass(pooled, fc_weights, nullptr, logits);
     softmax_ce_forward(logits, labels, loss);
     cudaDeviceSynchronize();
 
@@ -114,7 +114,7 @@ int main() {
     std :: cout << "Starting backward pass...\n";
     softmax_ce_backward(logits, labels, logits->grad);            
     matmul_backward_pass_A(pooled, fc_weights, logits->grad, pooled->grad);
-    matmul_backward_pass_B(pooled, fc_weights, logits->grad, pooled->grad, fc_weights->grad);
+    matmul_backward_pass_B(pooled, fc_weights, logits->grad, fc_weights->grad);
     global_pooling_backward_pass(pooled->grad, conv_out->grad);   
     conv2d_backward_pass_weight(input, conv_out->grad, 0, weights->grad);
     conv2d_backward_pass_input(weights, conv_out->grad, 0, input->grad);

@@ -18,7 +18,7 @@ void test_linear_autograd() {
     cudaMemcpy(x->data, h_x, 6 * sizeof(float), cudaMemcpyHostToDevice);
 
     // 2. Setup Linear Layer
-    Linear linear_layer(in_features, out_features, 1);
+    Linear linear_layer(in_features, out_features, 0, 1);
 
     // Set Weights W (Shape: [in_features, out_features] = [3, 4])
     float h_w[12];

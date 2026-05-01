@@ -49,10 +49,12 @@ class Linear {
     public:
         int in_features;
         int out_features;
+        int has_bias;
         int requires_grad;
         Tensor *weights;
+        Tensor *bias;
 
-        Linear(int in_features, int out_features, int requires_grad);
+        Linear(int in_features, int out_features, int has_bias, int requires_grad);
     
     Tensor *forward(Tensor *input);
 

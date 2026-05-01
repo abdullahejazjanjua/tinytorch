@@ -69,7 +69,7 @@ This document describes work added on top of the existing TinyTorch codebase: ne
 - Variable `ARCH` defaults to `-arch=sm_75` (matches original README assumptions).
 - On **Ampere** GPUs (e.g. RTX A2000), set `ARCH := -arch=sm_86` (or patch with `sed` on the machine).
 - Useful targets:
-  - `make all-tier1` — all wrapper tests + both autograd test binaries.
+  - `make all-tier1` — all wrapper tests + both autograd test binaries + `full-pipeline-test` (Conv → ReLU → GlobalPool → Linear(bias) → CE, one `backward(loss)`).
   - `make run-tier1` — build tier-1, then run each binary sequentially.
   - `make build/test_matmul`, `make build/test_conv` — Tier-2 PyTorch-comparison harnesses.
 
@@ -107,7 +107,7 @@ Companion Python scripts (`torch_matmul.py`, `torch_conv.py`) generate reference
 
 ## 6. Verification status (conceptual)
 
-- **Tier-1 (`make run-tier1`)** — exercises forward + backward for conv, pooling, softmax–CE (fused), matmul/GEMM (with and without bias in dedicated tests), ReLU, and SGD step logic, plus chained autograd (linear+CE and conv+pool+linear+CE).
+- **Tier-1 (`make run-tier1`)** — exercises forward + backward for conv, pooling, softmax–CE (fused), matmul/GEMM (with and without bias in dedicated tests), ReLU, and SGD step logic; chained autograd (linear+CE, conv+pool+linear+CE); plus **full-pipeline-test** (`Conv→ReLU→GlobalPool→Linear(bias)→CE`, single `backward(loss)`).
 
 - **Tier-2** — `build/test_matmul` + `tests/matmul/torch_matmul.py` and `build/test_conv` + `tests/conv/torch_conv.py` compare kernels to PyTorch on sampled shapes (when run successfully on a GPU machine with generated data).
 
@@ -162,6 +162,7 @@ Feature work landed on branch **`mumtaz`** and was pushed to the shared remote; 
 - `src/optim/sgd.cpp`
 - `include/optim.h`
 - `tests/wrapper/relu-wrapper.cpp`, `linear-bias-wrapper.cpp`, `sgd-wrapper.cpp`
+- `tests/integration/full-pipeline-test.cpp` — end-to-end Conv2D → ReLU → GlobalPool → Linear(bias) → CE; one `backward(loss)` with analytic checks including `bias->grad`
 - `Makefile`
 - This doc: `docs/IMPLEMENTATION_ADDITIONS.md`
 

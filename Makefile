@@ -1,7 +1,7 @@
 # TinyTorch Makefile
 # Builds tests against the full framework source tree.
 # Usage:
-#   make all-tier1       # self-contained tests (wrappers + autograd)
+#   make all-tier1       # self-contained tests (wrappers + autograd + integration)
 #   make run-tier1       # build + execute all self-contained tests
 #   make all             # everything including PyTorch-comparison tests
 #   make <test-name>     # single test (e.g. make build/relu-wrapper)
@@ -27,6 +27,9 @@ WRAPPER_TESTS  := relu-wrapper linear-wrapper linear-bias-wrapper conv-wrapper \
                   global-pooling-wrapper cross-entropy-wrapper sgd-wrapper
 AUTOGRAD_TESTS := autograd-test exhaustive-autograd-test
 
+# Single binary: longest practical graph forward + backward(loss) (Conv->ReLU->Pool->Linear(bias)->CE)
+INTEGRATION_TESTS := full-pipeline-test
+
 BUILD_DIR := build
 
 # --- Per-test build rules ---------------------------------------------------
@@ -38,6 +41,9 @@ $(BUILD_DIR)/autograd-test: tests/autograd/autograd-test.cpp $(CORE_SRCS) | $(BU
 	$(NVCC) $(NVCCFLAGS) $< $(CORE_SRCS) $(LDLIBS) -o $@
 
 $(BUILD_DIR)/exhaustive-autograd-test: tests/autograd/exhaustive-autograd-test.cpp $(CORE_SRCS) | $(BUILD_DIR)
+	$(NVCC) $(NVCCFLAGS) $< $(CORE_SRCS) $(LDLIBS) -o $@
+
+$(BUILD_DIR)/full-pipeline-test: tests/integration/full-pipeline-test.cpp $(CORE_SRCS) | $(BUILD_DIR)
 	$(NVCC) $(NVCCFLAGS) $< $(CORE_SRCS) $(LDLIBS) -o $@
 
 $(BUILD_DIR)/test_matmul: tests/matmul/test_matmul.c $(CORE_SRCS) | $(BUILD_DIR)
@@ -53,12 +59,13 @@ $(BUILD_DIR)/model-def: tests/model-definition/model-def.cpp $(CORE_SRCS) $(MNIS
 
 all-wrappers: $(addprefix $(BUILD_DIR)/, $(WRAPPER_TESTS))
 all-autograd: $(addprefix $(BUILD_DIR)/, $(AUTOGRAD_TESTS))
-all-tier1:    all-wrappers all-autograd
+all-integration: $(addprefix $(BUILD_DIR)/, $(INTEGRATION_TESTS))
+all-tier1:    all-wrappers all-autograd all-integration
 all:          all-tier1 $(BUILD_DIR)/test_matmul $(BUILD_DIR)/test_conv $(BUILD_DIR)/model-def
 
 # Run every self-contained test sequentially.
 run-tier1: all-tier1
-	@for t in $(WRAPPER_TESTS) $(AUTOGRAD_TESTS); do \
+	@for t in $(WRAPPER_TESTS) $(AUTOGRAD_TESTS) $(INTEGRATION_TESTS); do \
 	    echo "=== $$t ==="; \
 	    ./$(BUILD_DIR)/$$t || exit 1; \
 	    echo ""; \
@@ -70,4 +77,4 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: all all-tier1 all-wrappers all-autograd run-tier1 clean
+.PHONY: all all-tier1 all-wrappers all-autograd all-integration run-tier1 clean

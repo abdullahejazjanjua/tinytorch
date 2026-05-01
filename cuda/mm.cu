@@ -7,7 +7,7 @@
 #define COARSE_FACTOR 4
 
 __global__ void matmul_kernel(
-    float *A, float *B, float *C,
+    float *A, float *B, float *bias, float *C,
     int M, int N, int K
 )
 {
@@ -55,8 +55,11 @@ __global__ void matmul_kernel(
         for (int i = 0; i < COARSE_FACTOR; i++)
         {
             int col = col_start + i * BLOCK_SIZE;
-            if (col < N)
-                C[row * N + col] = accum[i];
+            if (col < N) {
+                float v = accum[i];
+                if (bias != nullptr) v += bias[col];
+                C[row * N + col] = v;
+            }
         }
     }
 }
@@ -176,7 +179,7 @@ __global__ void matmul_backward_B_kernel(
     }
 }
 
-void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C)
+void matmul_forward_pass(const Tensor *A, const Tensor *B, const Tensor *bias, Tensor *C)
 {
     int M = A->shape[0];
     int K = A->shape[1];
@@ -185,7 +188,8 @@ void matmul_forward_pass(const Tensor *A, const Tensor *B, Tensor *C)
     dim3 blockDim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridDim(cdiv(N, BLOCK_SIZE * COARSE_FACTOR), cdiv(M, BLOCK_SIZE));
 
-    matmul_kernel<<<gridDim, blockDim>>>(A->data, B->data, C->data, M, N, K);
+    float *bias_data = (bias != nullptr) ? bias->data : nullptr;
+    matmul_kernel<<<gridDim, blockDim>>>(A->data, B->data, bias_data, C->data, M, N, K);
     CUDA_CHECK(cudaGetLastError());
 }
 

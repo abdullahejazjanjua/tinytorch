@@ -26,7 +26,7 @@ Tensor* linear_functional_forward(Tensor *input, Tensor *weights, int requires_g
     
     Tensor *output = tensor_create(2, expected_shape, requires_grad, 1);
 
-    matmul_forward_pass(input, weights, output);
+    matmul_forward_pass(input, weights, nullptr, output);
 
     if (output->requires_grad) {
         Node *_prev = (Node *) malloc(sizeof(Node));

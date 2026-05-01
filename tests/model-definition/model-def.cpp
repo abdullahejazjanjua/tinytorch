@@ -76,7 +76,7 @@ int main() {
     std :: cout << "Starting forward pass...\n";
     conv2d_forward_pass(input, weights, 0, conv_out);
     global_pooling_forward_pass(conv_out, pooled);
-    matmul_forward_pass(pooled, fc_weights, logits);
+    matmul_forward_pass(pooled, fc_weights, nullptr, logits);
     softmax_ce_forward(logits, labels, loss);
     cudaDeviceSynchronize();
 

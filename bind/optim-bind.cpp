@@ -15,5 +15,5 @@ PYBIND11_MODULE(optim, m) {
         .def("step", &SGD::step)
         .def("zero_grad", &SGD::zero_grad);
 
-        m.def("backward", &backward);
+    m.def("backward", &backward);
 }

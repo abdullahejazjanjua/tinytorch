@@ -60,10 +60,15 @@ def run_epoch(base, optim, data_io, dataset, ix_list, n_samples, batch_size, con
             base.tensor_to_gpu(imgs)
             base.tensor_to_gpu(lbl_cpu)
 
-            h = conv.forward(imgs)
-            h = relu.forward(h)
-            h = pool.forward(h)
-            logits = lin.forward(h)
+            h1 = conv.forward(imgs)
+            h2 = relu.forward(h1)
+            
+            # h3 = conv.forward(h2)
+            # h4 = relu.forward(h3)
+            
+            h3 = pool.forward(h2)
+
+            logits = lin.forward(h3)
             loss = ce.forward(logits, lbl_cpu)
 
             base.tensor_to_cpu(loss)
@@ -85,6 +90,15 @@ def run_epoch(base, optim, data_io, dataset, ix_list, n_samples, batch_size, con
                 if pred == int(round(yd[j])):
                     correct += 1
             total_seen += bs
+
+            base.tensor_free(h1)
+            base.tensor_free(h2)
+            base.tensor_free(h3)
+            # base.tensor_free(h4)
+            # base.tensor_free(h5)
+            base.tensor_free(logits)
+            base.tensor_free(loss)
+
     finally:
         base.tensor_free(imgs)
         base.tensor_free(lbl_cpu)
@@ -99,7 +113,7 @@ def main(argv: list[str] | None = None):
     p = argparse.ArgumentParser(description="MNIST trainer (TinyTorch pybind)")
     p.add_argument("--data-dir", type=pathlib.Path, default=None, help="Folder with IDX files (default: <repo>/data)")
     p.add_argument("--epochs", type=int, default=1)
-    p.add_argument("--batch-size", type=int, default=64)
+    p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--lr", type=float, default=0.01)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument(
@@ -128,7 +142,7 @@ def main(argv: list[str] | None = None):
     import nn
     import optim as optim_mod
 
-    n_train = 60_000
+    n_train = 30000
     train_ds = data.load_dataset_in_ram(str(train_img), str(train_lbl), n_train)
     ix_train = np.array(data.create_indices(n_train), dtype=np.int32).tolist()
 
@@ -141,7 +155,7 @@ def main(argv: list[str] | None = None):
         n_eff = (n_eff // bs) * bs
 
     # Conv(padding nonzero => same H,W as input in this codebase), ReLU, global pool -> [B,C], Linear -> logits
-    conv = nn.Conv2D(1, 32, 5, 1, 1)
+    conv = nn.Conv2D(1, 32, 3, 1, 1)
     relu = nn.ReLU(1)
     pool = nn.GlobalPooling(1)
     lin = nn.Linear(32, 10, 1, 1)

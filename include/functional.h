@@ -20,4 +20,8 @@ void linear_functional_backward(Node *node, Tensor *dout);
 Tensor* cross_entropy_functional_forward(Tensor *logits, Tensor *labels, int ndim, int *expected_shape, int requires_grad);
 void cross_entropy_functional_backward(Node *node, Tensor *dout);
 
+// relu wrappers
+Tensor* relu_functional_forward(Tensor *input, int requires_grad);
+void relu_functional_backward(Node *node, Tensor *dout);
+
 #endif

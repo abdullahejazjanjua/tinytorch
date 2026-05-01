@@ -36,6 +36,10 @@ extern "C" {
     void softmax_ce_forward(Tensor *logits, Tensor *labels, Tensor *loss);
     void softmax_ce_backward(Tensor *logits, Tensor *labels, Tensor *grad_logits);
 
+    // relu
+    void relu_forward_pass(const Tensor *input, Tensor *output);
+    void relu_backward_pass(const Tensor *input, const Tensor *dout, Tensor *grad_in);
+
     void normal_xavier_init(Tensor *weight, int in_fan, int out_fan);
 
     Tensor* tensor_create(int ndim, int *shape, int requires_grad, int on_gpu);

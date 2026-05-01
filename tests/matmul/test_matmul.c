@@ -10,7 +10,7 @@ void load_bin(const char *filename, float *data, int size) {
         perror("File error"); 
         exit(1); 
     }
-    fread(data, sizeof(float), size, f);
+    (void)fread(data, sizeof(float), size, f);
     fclose(f);
 }
 
@@ -49,15 +49,20 @@ int main(int argc, char **argv) {
     int K = atoi(argv[2]);
     int N = atoi(argv[3]);
 
+    /* Named shape arrays — C++ forbids `(int[]) { … }` as a pointer source (temporary). */
+    int shape_A_MK[] = {M, K};
+    int shape_B_KN[] = {K, N};
+    int shape_C_MN[] = {M, N};
+
     // CPU-side tensors that get loaded from disk, then moved to GPU
-    Tensor *A  = tensor_create(2, (int[]){M, K}, 0, 0);
-    Tensor *B  = tensor_create(2, (int[]){K, N}, 0, 0);
-    Tensor *dC = tensor_create(2, (int[]){M, N}, 0, 0);
+    Tensor *A  = tensor_create(2, shape_A_MK, 0, 0);
+    Tensor *B  = tensor_create(2, shape_B_KN, 0, 0);
+    Tensor *dC = tensor_create(2, shape_C_MN, 0, 0);
 
     // Output tensors created directly on GPU
-    Tensor *C  = tensor_create(2, (int[]){M, N}, 0, 1);
-    Tensor *dA = tensor_create(2, (int[]){M, K}, 0, 1);
-    Tensor *dB = tensor_create(2, (int[]){K, N}, 0, 1);
+    Tensor *C  = tensor_create(2, shape_C_MN, 0, 1);
+    Tensor *dA = tensor_create(2, shape_A_MK, 0, 1);
+    Tensor *dB = tensor_create(2, shape_B_KN, 0, 1);
 
     char pathA[64], pathB[64], pathC[64], pathdC[64], pathdA[64], pathdB[64];
 

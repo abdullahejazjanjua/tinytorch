@@ -7,7 +7,7 @@
 void load_bin(const char *filename, float *data, int size) {
     FILE *f = fopen(filename, "rb");
     if (!f) { perror("File error"); exit(1); }
-    fread(data, sizeof(float), size, f);
+    (void)fread(data, sizeof(float), size, f);
     fclose(f);
 }
 
@@ -42,15 +42,20 @@ int main(int argc, char **argv) {
     int Ho = (P == 1) ? Hi : (Hi - K + 1);
     int Wo = (P == 1) ? Wi : (Wi - K + 1);
 
+    /* Named shape arrays — C++ forbids `(int[]) { … }` as a pointer source (temporary). */
+    int shape_input[]    = {N, Ci, Hi, Wi};
+    int shape_filt[]     = {Co, Ci, K, K};
+    int shape_output[]   = {N, Co, Ho, Wo};
+
     // CPU-side tensors that get loaded from disk, then moved to GPU
-    Tensor *input = tensor_create(4, (int[]){N, Ci, Hi, Wi}, 0, 0);
-    Tensor *filt  = tensor_create(4, (int[]){Co, Ci, K, K},  0, 0);
-    Tensor *dout  = tensor_create(4, (int[]){N, Co, Ho, Wo}, 0, 0);
+    Tensor *input = tensor_create(4, shape_input,  0, 0);
+    Tensor *filt  = tensor_create(4, shape_filt,   0, 0);
+    Tensor *dout  = tensor_create(4, shape_output, 0, 0);
 
     // Output tensors created directly on GPU
-    Tensor *out    = tensor_create(4, (int[]){N, Co, Ho, Wo}, 0, 1);
-    Tensor *grad_w = tensor_create(4, (int[]){Co, Ci, K, K},  0, 1);
-    Tensor *grad_x = tensor_create(4, (int[]){N, Ci, Hi, Wi}, 0, 1);
+    Tensor *out    = tensor_create(4, shape_output, 0, 1);
+    Tensor *grad_w = tensor_create(4, shape_filt,   0, 1);
+    Tensor *grad_x = tensor_create(4, shape_input,  0, 1);
 
     load_bin("data/input.bin",   input->data, input->size);
     load_bin("data/filters.bin", filt->data,  filt->size);

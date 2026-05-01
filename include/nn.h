@@ -12,6 +12,15 @@ class GlobalPooling {
     Tensor* forward(Tensor* input);
 };
 
+class ReLU {
+    private:
+        int requires_grad;
+    public:
+        ReLU(int requires_grad = 1);
+
+    Tensor* forward(Tensor* input);
+};
+
 class CrossEntropy {
     private:
         int requires_grad;

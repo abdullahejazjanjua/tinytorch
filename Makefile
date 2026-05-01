@@ -27,8 +27,8 @@ WRAPPER_TESTS  := relu-wrapper linear-wrapper linear-bias-wrapper conv-wrapper \
                   global-pooling-wrapper cross-entropy-wrapper sgd-wrapper
 AUTOGRAD_TESTS := autograd-test exhaustive-autograd-test
 
-# Single binary: longest practical graph forward + backward(loss) (Conv->ReLU->Pool->Linear(bias)->CE)
-INTEGRATION_TESTS := full-pipeline-test
+# Single binaries: Conv->ReLU->Pool->Linear(bias)->CE, then optional SGD
+INTEGRATION_TESTS := full-pipeline-test full-pipeline-sgd-test
 
 BUILD_DIR := build
 
@@ -43,7 +43,7 @@ $(BUILD_DIR)/autograd-test: tests/autograd/autograd-test.cpp $(CORE_SRCS) | $(BU
 $(BUILD_DIR)/exhaustive-autograd-test: tests/autograd/exhaustive-autograd-test.cpp $(CORE_SRCS) | $(BUILD_DIR)
 	$(NVCC) $(NVCCFLAGS) $< $(CORE_SRCS) $(LDLIBS) -o $@
 
-$(BUILD_DIR)/full-pipeline-test: tests/integration/full-pipeline-test.cpp $(CORE_SRCS) | $(BUILD_DIR)
+$(BUILD_DIR)/full-pipeline-sgd-test: tests/integration/full-pipeline-sgd-test.cpp $(CORE_SRCS) | $(BUILD_DIR)
 	$(NVCC) $(NVCCFLAGS) $< $(CORE_SRCS) $(LDLIBS) -o $@
 
 $(BUILD_DIR)/test_matmul: tests/matmul/test_matmul.c $(CORE_SRCS) | $(BUILD_DIR)

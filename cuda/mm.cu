@@ -225,3 +225,26 @@ void matmul_backward_pass_B(
 
     CUDA_CHECK(cudaGetLastError());
 }
+
+// db = sum(dC, axis=0). bias is [N], dC is [M, N]
+__global__ void matmul_backward_bias_kernel(const float *dC, float *db, int M, int N)
+{
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= N) return;
+
+    float acc = 0.0f;
+    for (int row = 0; row < M; row++) {
+        acc += dC[row * N + col];
+    }
+    db[col] = acc;
+}
+
+void matmul_backward_pass_bias(const Tensor *dC, Tensor *db)
+{
+    int M = dC->shape[0];
+    int N = dC->shape[1];
+
+    int block = 256;
+    matmul_backward_bias_kernel<<<cdiv(N, block), block>>>(dC->data, db->data, M, N);
+    CUDA_CHECK(cudaGetLastError());
+}

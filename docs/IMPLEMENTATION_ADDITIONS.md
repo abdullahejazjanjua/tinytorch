@@ -162,7 +162,8 @@ Feature work landed on branch **`mumtaz`** and was pushed to the shared remote; 
 - `src/optim/sgd.cpp`
 - `include/optim.h`
 - `tests/wrapper/relu-wrapper.cpp`, `linear-bias-wrapper.cpp`, `sgd-wrapper.cpp`
-- `tests/integration/full-pipeline-sgd-test.cpp` — same graph as above; after `backward(loss)`, one `SGD::step()` on conv/linear weights + bias verifies `new = old - lr * grad`, then `zero_grad()` clears grads.
+- `tests/integration/full-pipeline-test.cpp` — Conv→ReLU→GlobalPool→Linear(bias)→CE + `backward(loss)` analytic checks.
+- `tests/integration/full-pipeline-sgd-test.cpp` — same graph + `backward(loss)`, then `SGD::step()` verifies `new = old - lr·grad`, then `zero_grad()` clears grads.
 - `Makefile`
 - This doc: `docs/IMPLEMENTATION_ADDITIONS.md`
 

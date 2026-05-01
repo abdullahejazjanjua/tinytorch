@@ -4,8 +4,8 @@
 #include "tensor.h"
 #include "common.cuh"
 
-void inline Malloc(float *f, int size, const char *msg) {
-    f = (float*) malloc(size * sizeof(float));
+void inline Malloc(float **f, int size, const char *msg) {
+    *f = (float*) malloc(size * sizeof(float));
     if (f == nullptr) {
         std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: " << msg << "\n";
         return;
@@ -106,6 +106,8 @@ void tensor_to_gpu(Tensor *t) {
 }
 
 void tensor_to_cpu(Tensor *t) {
+    if (!t->on_gpu) return;
+
     if (t == nullptr) {
         std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: Tensor is empty\n";
         return;
@@ -121,12 +123,12 @@ void tensor_to_cpu(Tensor *t) {
 
     float *data = nullptr, *grad_data = nullptr;
     // Allocate space on CPU and move data there
-    Malloc(data, t->size, "Couldn't allocate data field on CPU");
+    Malloc(&data, t->size, "Couldn't allocate data field on CPU");
     CUDA_CHECK( cudaMemcpy(data, t->data, t->size * sizeof(float), cudaMemcpyDeviceToHost) );
 
     if (t->grad && t->grad->data) {
         // Allocate space on CPU and move grad_data there
-        Malloc(grad_data, t->grad->size, "Couldn't allocate grad->data field on CPU");
+        Malloc(&grad_data, t->grad->size, "Couldn't allocate grad->data field on CPU");
         CUDA_CHECK( cudaMemcpy(grad_data, t->grad->data, t->grad->size * sizeof(float), cudaMemcpyDeviceToHost) );
     }
 

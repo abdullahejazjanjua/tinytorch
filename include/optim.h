@@ -11,4 +11,18 @@ extern "C" {
 }
 #endif
 
+#ifdef __cplusplus
+#include <vector>
+
+class SGD {
+    private:
+        std::vector<Tensor*> params;
+        float lr;
+    public:
+        SGD(std::vector<Tensor*> params, float lr);
+        void step();
+        void zero_grad();
+};
+#endif
+
 #endif

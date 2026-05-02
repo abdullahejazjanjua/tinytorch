@@ -267,7 +267,7 @@ All 49 configurations launched successfully. Each configuration respected the co
 | N=8 Ci=48 HW=32×32 Co=96 k=5 same | 48.0488 | 2.8455 | 0.059 |
 | N=256 Ci=64 HW=8×8 Co=128 k=3 same | 215.2738 | 3.7265 | 0.017 |
 
-## Discussion (convolution)
+#### Discussion (convolution)
 
 On almost every line, PyTorch finishes the fused forward-backward pair in a fraction of the time TinyTorch needs. The ratio is least punishing on tiny problems, such as single-channel MNIST-ish maps with few output channels. In these instances, fixed launch and synchronization overhead constitutes a measurable slice of TinyTorch's time. This is evident in the row with Ci=1 and a Torch/Tiny ratio of ~0.97.
 
@@ -290,7 +290,7 @@ As soon as width, height, and channels grow, TinyTorch times climb into tens or 
 | batch=64 in=2048 out=512 | 2.7471 | 0.5429 | 0.198 |
 | batch=32 in=8192 out=2048 | 50.2132 | 1.5569 | 0.031 |
 
-## Discussion (linear)
+#### Discussion (linear)
 
 The large 4096x4096-ish batch=1 matmuls show the most significant difference, with a ~48 ms median for TinyTorch versus ~0.9 ms for PyTorch. The reason is that this codebase uses a straightforward GEMM path.
 
@@ -307,7 +307,7 @@ The large 4096x4096-ish batch=1 matmuls show the most significant difference, wi
 | N=8 C=32 HW=56×56 | 3.2289 | 0.6614 | 0.205 |
 | N=32 C=128 HW=16×16 | 3.8751 | 0.7892 | 0.204 |
 
-## Discussion (ReLU)
+#### Discussion (ReLU)
 
 For the five rows that sweep the ImageNet-style spatial pyramid at a roughly constant total element count (224^2 x 64 ≈ 112^2 x 128 ≈ ...), the median times for TinyTorch cluster near 10.2 ms while PyTorch remains near 2.0 ms. This indicates that the harness is stable and the bottleneck is not a result of a fluctuating timer. It represents a consistent factor-of-five disadvantage in elementwise fusion. The 7x7 high-channel row is less expensive in absolute terms because it simply contains fewer total elements.
 
@@ -322,7 +322,7 @@ For the five rows that sweep the ImageNet-style spatial pyramid at a roughly con
 | N=16 C=64 HW=32×32 | 1.8767 | 0.1745 | 0.093 |
 | N=8 C=512 HW=7×7 | 0.7515 | 0.1792 | 0.238 |
 
-## Discussion (global average pooling)
+#### Discussion (global average pooling)
 
 The results for global pooling follow a similar pattern to ReLU with a different constant factor. Reduction kernels in PyTorch are extremely efficient on this GPU for these sizes, while TinyTorch spends several milliseconds on large feature maps. The Torch/Tiny ratio improves on smaller spatial sizes, such as 7x7, where overhead becomes a more dominant factor in the total execution time.
 
@@ -338,17 +338,17 @@ As one man said ["Yaa To Win Hai Ya To Learn hai "](https://www.youtube.com/watc
 | N=4096 classes=48 | 0.0509 | 0.1536 | 3.017 |
 | N=1024 classes=63 | 0.0406 | 0.1535 | 3.776 |
 
-## Discussion (loss)
+#### Discussion (loss)
 
 In this section, the Torch/Tiny ratio is above 1, meaning TinyTorch’s fused kernel returned a lower median latency than torch.nn.functional.cross_entropy for this narrow class-count regime. This is consistent with a small specialized kernel that does not solve the general problem versus PyTorch’s general backward path, which handles more cases and more edge behavior. The 4096x48 row is still faster on TinyTorch but by a smaller factor because batch scaling starts to show. While this does not rescue a model whose time is dominated by convolution, as MNIST training still spends most of its execution in conv and GEMM kernels rather than the loss, it represents a real bright spot in the table.
 
 
-## Testing and correctness
+# Testing and correctness
 
 Each kernel and integration was tested prior to moving to the next implementation. We verified correctness by comparing results against PyTorch or by running small examples with analytically verified outcomes. Because these test cases were developed alongside the library and the codebase has evolved significantly across increments, many of them are no longer executable. They are included in the tests/ folder for the sake of completeness.
 
 
-## Autograd (how backward actually runs)
+# Autograd (how backward actually runs)
 
 When a tensor with `requires_grad=1` participates in an operation, the functional code allocates an output tensor. If gradients are needed, it attaches a prev pointer to a Node struct that stores pointers to inputs, optional context for backward, and a generic function pointer to the correct backward implementation.
 

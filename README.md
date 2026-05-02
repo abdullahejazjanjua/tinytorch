@@ -49,11 +49,12 @@ There is no universal “compile for everything” flag that stays fast and smal
 
 ## Building from source
 
-Open a terminal, `cd` into the `bind` folder at the root of this repo, then:
-
 ```text
-cmake -B build -S .
-cmake --build build --config Release
+cd bind
+mkdir build
+cd build
+cmake ..
+cmake --build .
 ```
 
 On Windows with multi-config generators you still get a `Release` folder under `build/` for object files, but the **Python extension modules** are configured with `LIBRARY_OUTPUT_DIRECTORY` pointing at **`../`** relative to `bind/`, i.e. the directory that contains `train_mnist.py`. After a successful build you should see shared libraries whose names depend on the platform (`base*.so`, `nn*.so`, … on Linux, or `.pyd` on Windows).

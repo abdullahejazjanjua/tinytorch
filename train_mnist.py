@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import sys
+import time
 from typing import Any, List, Tuple
 
 import numpy as np
@@ -114,8 +115,10 @@ def run_epoch(
     imgs = base.tensor_create([batch_size, 1, 28, 28], 0, 0)
     lbl_cpu = base.tensor_create([batch_size], 0, 0)
 
-    print(f"epoch {epoch_no}/{epoch_total}: ")
+    print()
+    print("Epoch", epoch_no, "of", epoch_total)
 
+    t0 = time.time()
     try:
         for bi in range(num_batches):
             s = bi * batch_size
@@ -167,21 +170,32 @@ def run_epoch(
                 epoch_end = batches_done == num_batches
                 if step_done or epoch_end:
                     print(
-                        f"  batch {batches_done}/{num_batches}  "
-                        f"  running_loss={running_avg:.6f}",
-                        flush=True,
+                        "  batch",
+                        batches_done,
+                        "of",
+                        num_batches,
+                        "| running loss:",
+                        round(running_avg, 6),
                     )
     finally:
         base.tensor_free(imgs)
         base.tensor_free(lbl_cpu)
 
+    epoch_wall_s = time.time() - t0
     avg_loss = total_loss / max(1, num_batches)
     acc = correct / max(1, total_seen)
+    print()
     print(
-        f"epoch {epoch_no}/{epoch_total}  summary  avg_loss={avg_loss:.6f}  train_acc={acc:.4f}",
-        flush=True,
+        "Epoch",
+        epoch_no,
+        "summary | avg loss:",
+        round(avg_loss, 6),
+        "| train accuracy:",
+        round(acc, 4),
+        "| time (s):",
+        round(epoch_wall_s, 3),
     )
-    return avg_loss, acc
+    return avg_loss, acc, epoch_wall_s
 
 
 def evaluate_classifier(
@@ -254,11 +268,10 @@ def evaluate_classifier(
 
     avg_loss = total_loss / num_batches
     acc = correct / max(1, total_seen)
-    print(
-        f"{label}  examples={n_eval}  batches={num_batches}  "
-        f"avg_loss={avg_loss:.6f}  accuracy={acc:.4f}",
-        flush=True,
-    )
+    print()
+    print(label)
+    print("  samples:", n_eval, "| batches:", num_batches)
+    print("  avg loss:", round(avg_loss, 6), "| accuracy:", round(acc, 4))
     return avg_loss, acc
 
 
@@ -341,7 +354,7 @@ def main(argv: list[str] | None = None):
     test_lbl = data_dir / "t10k-labels.idx1-ubyte"
 
     if not train_img.is_file() or not train_lbl.is_file():
-        print(f"Missing MNIST IDX under {data_dir}", file=sys.stderr)
+        print("Missing MNIST train IDX under:", data_dir, file=sys.stderr)
         sys.exit(1)
 
     import_extensions()
@@ -373,15 +386,27 @@ def main(argv: list[str] | None = None):
         n_eff = min(n_train, args.limit_batches * args.batch_size)
     bs = args.batch_size
     if n_eff % bs != 0:
-        print(f"Warning: truncating dataset to {(n_eff // bs) * bs} samples (full batches only)", file=sys.stderr)
+        print(
+            "Warning: truncating to full batches:",
+            (n_eff // bs) * bs,
+            "samples",
+            file=sys.stderr,
+        )
         n_eff = (n_eff // bs) * bs
 
     if args.limit_batches is not None:
-        print(f"limit-batches: using {n_eff} samples per epoch (not full MNIST)")
-    print(f"samples/epoch={n_eff} bs={bs} lr={args.lr}  {arch_desc}")
+        print("Using limited batches, samples per epoch:", n_eff)
+    print()
+    print("Training config")
+    print("  samples per epoch:", n_eff)
+    print("  batch size:", bs)
+    print("  learning rate:", args.lr)
+    print("  data directory:", str(data_dir))
+    print("  architecture:", arch_desc)
 
+    total_training_wall_s = 0.0
     for ep in range(args.epochs):
-        run_epoch(
+        _loss, _acc, sec = run_epoch(
             base,
             optim_mod,
             data,
@@ -397,20 +422,20 @@ def main(argv: list[str] | None = None):
             epoch_total=args.epochs,
             running_loss_every=args.running_loss_every,
         )
+        total_training_wall_s += sec
+
+    print()
+    print("Total training time (s):", round(total_training_wall_s, 3))
 
     data.free_mnist_data(train_ds)
 
     if args.skip_eval:
-        print("Done (eval skipped).", flush=True)
+        print("Done (evaluation skipped).")
         return
 
     if not test_img.is_file() or not test_lbl.is_file():
-        print(
-            f"Skipping evaluation: missing test IDX under {data_dir}. "
-            f"Put t10k-images.idx3-ubyte and t10k-labels.idx1-ubyte there.",
-            file=sys.stderr,
-        )
-        print("Done.", flush=True)
+        print("Skipping evaluation: no test IDX files (t10k-*) under:", data_dir, file=sys.stderr)
+        print("Done.")
         return
 
     n_test_set = 10_000
@@ -426,10 +451,11 @@ def main(argv: list[str] | None = None):
         bs,
         backbone,
         ce,
-        label="Testing:",
+        label="Test set (IDX)",
     )
 
     data.free_mnist_data(test_ds)
+    print()
     print("Done.")
 
 

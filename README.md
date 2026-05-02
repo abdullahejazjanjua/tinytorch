@@ -18,7 +18,6 @@ TinyTorch is a minimalist deep learning library we built to better understand ho
 *   `mnist-dataloader`: The dataloader and helper functions for MNIST; because the dataset is small, it is kept entirely in RAM.
 *   `bind/`: Defines three separate modules and binds them to Python using PyBind11.
 
----
 
 ## Prerequisites
 
@@ -29,7 +28,6 @@ You must have the following installed on your system:
 - pybind11 (I don't know which version; just run `pip install pybind11`)
 - nvcc compiler
 - clang++ or g++
----
 
 ## Building from source
 
@@ -85,11 +83,10 @@ The output of each layer is kept in GPU VRAM by default to avoid the overhead of
 *   **nn.ReLU / nn.GlobalPooling**: Layers for non-linear activation and spatial reduction of feature maps.
 *   **nn.CrossEntropy**: A loss module used for calculating the error during multi-class nclassification.
 
-### optim.
-*   **nn.SGD**: Implementation of Stochastic Gradient Descent that takes a list of parameters and a learning rate to perform updates.
-*   **nn.zero_grad**: Method within the SGD class to reset the gradients of all managed tensors.
-*   **nn.backward**: A global function that executes the autograd system's backpropagation logic.
-
+### optim
+*   **optim.SGD**: Implementation of Stochastic Gradient Descent that takes a list of parameters and a learning rate to perform updates.
+*   **optim.zero_grad**: Method within the SGD class to reset the gradients of all managed tensors.
+*   **optim.backward**: A global function that executes the autograd system's backpropagation logic.
 
 ## Limitations
 
@@ -99,11 +96,9 @@ We have an "adoption" policy because we do not leave any orphaned tensors behind
 
 Although `tensor_create` allows for direct GPU allocation, the resulting memory view is awkward to populate from NumPy across the PCIe bus. We instead allocate tensors on the CPU first to facilitate moving images sequentially from RAM into the tensor before transferring the entire batch to the GPU in one go using `base.tensor_to_gpu(x)`. Layers like `Conv2D` and `Linear` still allocate their weights directly on the GPU within their constructors to minimize host-to-device overhead.
 
----
 
-## Python API 
+## Python API
 
-### Example 1
 
 ```python
 import numpy as np
@@ -178,21 +173,40 @@ Earlier versions of the global pooling kernel ran into grid limits when batch x 
 
 The fused loss kernel is only valid when num_classes is strictly less than 64, meaning you would practically use 1 through 63 output logits. The implementation assumes a class dimension small enough that a single warp can cooperate during reduction. This choice was made because most of our target datasets, such as MNIST, have fewer than 64 classes. While we originally recomputed quantities in the backward path to avoid adding extra fields to the Tensor struct, the logic was later updated to allow the Node to store the necessary context for backward calls. This change makes the previous justification for redundant math moot and identifies a potential area for optimization. 
 
----
+## Performance Comparison: MNIST Training
 
 The following numbers come from one pair of runs on the same machine, same data root, same architecture description, and same optimization hyperparameters, differing only in whether the loop was driven by TinyTorch+IDX or by PyTorch+torchvision MNIST tensors.
 
-## Setup
+### Setup Parameters
 
-*   Training samples per epoch: 59,968 (full batches only; remainder of 60,000 dropped for batch size 64).
-*   Batch size: 64.
-*   Learning rate: 0.05.
-*   Epochs: 10.
-*   Architecture (both sides): convolutional stem 1 -> 48 -> 96 channels with 5x5 convs and padding chosen to match the TinyTorch convention, global average pooling to a vector of width 96, then MLP head 96 -> 128 -> 10 with ReLU between (exact layer order matches the twin scripts in this repo).
-*   TinyTorch reads IDX from .../data; PyTorch used MNIST rooted at the same path.
-*   Test evaluation in the logs below uses 9,984 test samples (again full batches only from the 10,000 test images).
+| Parameter | Value |
+| :--- | :--- |
+| **Training Samples** | 59,968 (Remainder of 60,000 dropped for batch size consistency) |
+| **Batch Size** | 64 |
+| **Learning Rate** | 0.05 |
+| **Epochs** | 10 |
+| **Test Samples** | 9,984 (Full batches only) |
+
+---
+
+### Architecture Configuration
+
+The network architecture is identical for both frameworks:
+
+*   **Convolutional Stem:** 1 → 48 → 96 channels using $5 \times 5$ convolutions.
+*   **Padding:** Matches the TinyTorch convention.
+*   **Global Average Pooling:** Collapses spatial dimensions to a vector of width 96.
+*   **MLP Head:** 96 → 128 → 10 layers with ReLU activations.
+
+---
+
+### Data and Evaluation
+
+*   **Data Handling:** TinyTorch reads raw IDX files, while PyTorch uses the `torchvision` MNIST dataset rooted at the same directory.
+*   **Evaluation Protocol:** Testing uses 9,984 samples to maintain full batch counts.
 
 ## Summary Table
+
 
 | Metric | TinyTorch | PyTorch (CUDA) |
 | :--- | :--- | :--- |
@@ -202,13 +216,8 @@ The following numbers come from one pair of runs on the same machine, same data 
 | Test: mean loss | 0.143 | 0.205 |
 | Test: accuracy | 95.6% | 94.2% |
 
-## How to Read It
 
-Both runs show loss decreasing epoch over epoch and accuracy increasing; neither training curve is "broken." TinyTorch finishes an epoch in roughly two minutes early on and stabilizes near ~126 s per epoch later; PyTorch finishes most epochs in five to seven seconds on the same GPU. The ~20x total-time ratio is dominated by custom kernels without cuDNN-level fusion, explicit host/device staging in the Python training loop, and allocator behavior, not because TinyTorch magically does more floating-point work per epoch. The batch count is fixed.
-
-The final train loss is lower on TinyTorch and train accuracy is higher, while test accuracy is also slightly higher on TinyTorch on this split. These are single seeds / single runs without exhaustive sweeps; differences can come from initialization details, numerical ordering, data order (even with shuffle, the stacks are not bitwise identical), and subtle BN-free CNN differences between the twins. The point for this README is not that TinyTorch is a better learner, but that it does learn and lands in a ballpark that PyTorch also reaches, while being much slower per wall-clock epoch.
-
----
+TinyTorch shows lower final training loss and higher training accuracy on this split, while its test accuracy is also slightly higher. These results are from single seeds and runs without exhaustive sweeps; performance differences may stem from initialization details, numerical ordering, or data order, among other factors. Conversely, PyTorch trains the model approximately 20x faster because it utilizes highly optimized kernels.
 
 ## Layer micro-benchmarks (full table and interpretation)
 
@@ -332,13 +341,12 @@ As one man said ["Yaa To Win Hai Ya To Learn hai "](https://www.youtube.com/watc
 ## Discussion (loss)
 
 In this section, the Torch/Tiny ratio is above 1, meaning TinyTorch’s fused kernel returned a lower median latency than torch.nn.functional.cross_entropy for this narrow class-count regime. This is consistent with a small specialized kernel that does not solve the general problem versus PyTorch’s general backward path, which handles more cases and more edge behavior. The 4096x48 row is still faster on TinyTorch but by a smaller factor because batch scaling starts to show. While this does not rescue a model whose time is dominated by convolution, as MNIST training still spends most of its execution in conv and GEMM kernels rather than the loss, it represents a real bright spot in the table.
----
+
 
 ## Testing and correctness
 
 Each kernel and integration was tested prior to moving to the next implementation. We verified correctness by comparing results against PyTorch or by running small examples with analytically verified outcomes. Because these test cases were developed alongside the library and the codebase has evolved significantly across increments, many of them are no longer executable. They are included in the tests/ folder for the sake of completeness.
 
----
 
 ## Autograd (how backward actually runs)
 
@@ -350,11 +358,9 @@ Calling `optim.backward(Tensor *)` starts from the passed tensor and topological
 
 ### Memory management requirements
 
-Because there is no automatic destructor graph like in PyTorch, Python examples must call `tensor_free(Tensor *)` for every allocated tensor once it leaves scope. Failure to do so will result in VRAM increasing until the process terminates. For this reason, training scripts in this repository free tensors aggressively after each step.
+Because there is no automatic destructor graph like in PyTorch, Python examples must call `tensor_free(Tensor *)` for every allocated tensor once it leaves scope. Failure to do so will result in VRAM increasing until the process terminates. For this reason, training scripts in this repository free tensors aggressively after each step. This approach was directly inspired by Karpathy's micrograd. More information can be found here: [https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s](https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s)
 
-This approach was directly inspired by Karpathy's micrograd. More information can be found here: [https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s](https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s)
----
 
-## Contribution
+# Contribution
 
 Many optimizations and additional kernels remain to be implemented. Contributions are welcome via pull requests. Ongoing development aims to evolve this project into a robust mini-library.

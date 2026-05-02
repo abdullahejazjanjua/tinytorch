@@ -142,9 +142,9 @@ def run_epoch(
             base.tensor_to_cpu(loss)
             total_loss += float(loss.data[0])
 
+            optimizer.zero_grad()
             optim.backward(loss)
             optimizer.step()
-            optimizer.zero_grad()
 
             base.tensor_to_cpu(logits)
             base.tensor_to_cpu(lbl_cpu)

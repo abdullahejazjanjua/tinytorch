@@ -20,12 +20,12 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
     #pragma unroll
     for (int bs = 0; bs < COARSE_FACTOR_FORWARD; ++bs) {
         int batch_idx = start_batch_idx + bs;
-        if (batch_idx >= batch_size) continue;
+        if (batch_idx >= batch_size) continue; // account for the ceil func
 
         #pragma unroll
         for (int c = 0; c < COARSE_FACTOR_FORWARD; ++c) {
             int channel_idx = start_channel_idx + c;
-            if (channel_idx >= num_channels) continue;
+            if (channel_idx >= num_channels) continue; // account for the ceil func
 
             float sum = 0.0f;
             for(unsigned int tile = 0; tile < COARSE_FACTOR_FORWARD * 2; ++tile) {
@@ -56,6 +56,7 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
             }
             __syncthreads(); // process all elements in the current channel
             if (threadIdx.x == 0) {
+                // all blocks accumulate the result
                 atomicAdd(&out[batch_idx * num_channels + channel_idx], val / height_width);
             }
             __syncthreads(); // process all the elements in the current batch
@@ -65,7 +66,14 @@ __global__ void global_pooling_forward_kernel(float *data, int batch_size, int n
 
 __global__ void global_pooling_backward_kernel(float *dout, int batch_size, int num_channels, int height, int width, float *grad_data) {
     int channel_groups = cdiv(num_channels, COARSE_FACTOR_BACKWARD);
+    
+    // Modulo (%) is the fast-changing dimension
+    // start_channel_idx will cycle rapidly from $0$ up to channel_groups - 1 and then reset.
     int start_channel_idx = (blockIdx.x % channel_groups) * COARSE_FACTOR_BACKWARD;
+    
+    // Integer Division (/) is the slow-changing dimension
+    // start_batch_idx will remain on the exact same value while the block index processes an entire row of channel_groups. 
+    // It only increments when the modulo resets.
     int start_batch_idx  = (blockIdx.x / channel_groups) * COARSE_FACTOR_BACKWARD;
 
     int row = blockIdx.y * blockDim.y + threadIdx.y;
@@ -74,12 +82,12 @@ __global__ void global_pooling_backward_kernel(float *dout, int batch_size, int 
     #pragma unroll
     for (int bs = 0; bs < COARSE_FACTOR_BACKWARD; bs++) {
         int batch_idx = start_batch_idx + bs;
-        if (batch_idx >= batch_size) continue;
+        if (batch_idx >= batch_size) continue; // account for the ceil func
 
         #pragma unroll
         for (int c = 0; c < COARSE_FACTOR_BACKWARD; c++) {
             int channel_idx = start_channel_idx + c;
-            if (channel_idx >= num_channels) continue;
+            if (channel_idx >= num_channels) continue; // account for the ceil func
 
             float global_pool_val = dout[batch_idx * (num_channels) + channel_idx];
             if (row < height && col < width)

@@ -22,6 +22,7 @@ __global__ void softmax_ce_forward_kernel(float *logits, float *y, int batch_siz
         // update each thread's max to 0th thread's max
         max_val = __shfl_sync(0xffffffff, max_val, 0);
 
+        __syncthreads();
         // find sum of exp - max_val
         if (threadIdx.x < num_classes) exp_sum = expf(logits[batch_idx * num_classes + class_idx] - max_val);
         if (threadIdx.x < num_classes && class_idx + 32 < num_classes) exp_sum += expf(logits[batch_idx * num_classes + (class_idx + 32)] - max_val);
@@ -31,6 +32,7 @@ __global__ void softmax_ce_forward_kernel(float *logits, float *y, int batch_siz
         }
     }
 
+    __syncthreads();
     if (threadIdx.x == 0) {
         int target_class = y[batch_idx];
         float target_logit = logits[batch_idx * num_classes + target_class];
@@ -57,7 +59,8 @@ __global__ void softmax_ce_backward_kernel(float *logits, float *y, int batch_si
         }
         // broadcast max_val to all threads
         max_val = __shfl_sync(0xffffffff, max_val, 0);
-
+        
+        __syncthreads();
         // find sum of exp - max_val
         if (threadIdx.x < num_classes) exp_sum = expf(logits[batch_idx * num_classes + class_idx] - max_val);
         if (threadIdx.x < num_classes && class_idx + 32 < num_classes) exp_sum += expf(logits[batch_idx * num_classes + (class_idx + 32)] - max_val);
@@ -67,14 +70,16 @@ __global__ void softmax_ce_backward_kernel(float *logits, float *y, int batch_si
         }
     }
     exp_sum = __shfl_sync(0xffffffff, exp_sum, 0);
-    // threads 0-31
+
+    __syncthreads();
+    // logits 0-31
     if (threadIdx.x < num_classes) {
         // get register max_val and exp_sum from thread 0 into current threads registers
         float prob = (expf(logits[batch_idx * num_classes + class_idx] - max_val)) / exp_sum;
         if (threadIdx.x == y[batch_idx]) grad_logits[batch_idx * num_classes + class_idx] = (prob - 1.0f) / batch_size;
         else grad_logits[batch_idx * num_classes + class_idx] = prob / batch_size;
     }
-    // threads 32-63
+    // logits 32-63
     if (threadIdx.x + 32 < num_classes) {
         // get register max_val and exp_sum from thread 0 into current threads registers
         float prob = expf(logits[batch_idx * num_classes + (class_idx + 32)] - max_val) / exp_sum;

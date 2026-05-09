@@ -224,8 +224,6 @@ __global__ void conv2d_backward_input_kernel(float *dout,
 
     // shift by kernel_size to the left to account for the fact that multiple douts with multiple ws 
     // are requried for grad_in (see derivation in notes)
-    int start_dout_y = (blockIdx.y * blockDim.y) + pad_h - kernel_size + 1;
-    int start_dout_x = (blockIdx.x * blockDim.x) + pad_w - kernel_size + 1;
 
     float grad = 0.0f;
     for (int out_c = 0; out_c < out_channels; out_c++) {
@@ -235,8 +233,8 @@ __global__ void conv2d_backward_input_kernel(float *dout,
             int load_y = t / tile_dim;
             int load_x = t % tile_dim;
 
-            int dout_y = start_dout_y + load_y;
-            int dout_x = start_dout_x + load_x;
+            int dout_y =  ((blockIdx.y * blockDim.y) + pad_h - kernel_size + 1) + load_y; // load the lowest yth it needs
+            int dout_x = ((blockIdx.x * blockDim.x) + pad_w - kernel_size + 1) + load_x; // load the lowest yth it needs
 
             if (dout_y >= 0 && dout_y < output_height && dout_x >= 0 && dout_x < output_width)
                 s_dout_tile[load_y * tile_dim + load_x] = dout[batch_idx * (out_channels * output_height * output_width) +

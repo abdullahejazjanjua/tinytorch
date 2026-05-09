@@ -5,9 +5,13 @@
 
 namespace py = pybind11;
 
+// in many places, we have used logic of putting data inside a vector, this is done because pybind11/stl.h
+// can perform type conversions, which in this case turns a vector into a python list
+
 PYBIND11_MODULE(mnist_io, m) {
     py::class_<MNISTData>(m, "MNISTData");
-
+    
+    // [](...) is a lambda function definition
     m.def("create_indices", [](int num_images) {
         int* raw_ptr = create_indices(num_images);
         std::vector<int> indices(raw_ptr, raw_ptr + num_images);

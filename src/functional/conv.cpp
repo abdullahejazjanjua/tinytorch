@@ -6,7 +6,7 @@
 void conv2d_functional_backward(Node *node, Tensor *dout) {
     Tensor *input = node->inputs[0];
     Tensor *weights = node->inputs[1];
-    int padding = (int)(intptr_t)node->ctx[0];
+    int padding = (int)(intptr_t)node->ctx[0]; // reverse the cast
 
     if (input->requires_grad) {
         conv2d_backward_pass_input(weights, dout, padding, input->grad);
@@ -53,6 +53,15 @@ Tensor* conv2d_functional_forward(Tensor *input, Tensor *weights, int padding, i
         _prev->num_inputs = 2;
 
         _prev->ctx = (void**) malloc(sizeof(void*));
+        /* 
+            since ctx is an array of void pointers, and padding is an int
+            we have to cast padding to a input pointer and then cast it to a void pointer
+            cpp doesn't allow casting int to a void pointer direclty.
+
+            intptr_t widens 32bit int to address size (i.e 64 bit)
+            We con't use heap because I would have to free it then (which is a pain honestly)
+        */
+        
         _prev->ctx[0] = (void*) (intptr_t) padding;
         _prev->num_ctx = 1;
 

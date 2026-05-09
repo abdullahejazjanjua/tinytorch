@@ -43,7 +43,7 @@ MNISTData* load_dataset_in_ram(const char *images_path, const char *labels_path,
         return nullptr;
     }
     // HEADER: 4 bytes (magic number) + 4 bytes (num_images) + 4 bytes (num_rows) + 4 bytes (num_cols) = 16 bytes
-    ifile.seekg(16, std::ios::beg); // skip header
+    ifile.seekg(16, std::ios::beg); // skip header from the start (ios::beg)
     ifile.read((char*)data->images, num_images * IMAGE_SIZE);
     ifile.close();
 
@@ -56,7 +56,7 @@ MNISTData* load_dataset_in_ram(const char *images_path, const char *labels_path,
         return nullptr;
     }
     // HEADER: 4 bytes (magic number) + 4 bytes (num_images) = 8 bytes
-    lfile.seekg(8, std::ios::beg); // skip header
+    lfile.seekg(8, std::ios::beg); // skip header from the start (ios::beg)
     lfile.read((char*)data->labels, num_images);
     lfile.close();
     
@@ -71,7 +71,7 @@ void load_batch_to_tensor(MNISTData *dataset, int batch_start, int batch_end, in
     
     int local_batch = 0;
     for (int bs = batch_start; bs < batch_end; bs++) {
-        int img_id = indices[bs];
+        int img_id = indices[bs]; // extract which img to load from shuffled indices
 
         for (int i = 0; i < image_height; i++) {
             for (int j = 0; j < image_width; j++) {

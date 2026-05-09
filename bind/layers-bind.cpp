@@ -11,7 +11,7 @@ namespace py = pybind11;
 PYBIND11_MODULE(nn, m) {
 
     py::class_<GlobalPooling>(m, "GlobalPooling")
-        .def(py::init<int>(), py::arg("requires_grad") = 1)
+        .def(py::init<int>(), py::arg("requires_grad") = 1) // alows passing named args
         .def("forward", &GlobalPooling::forward, py::return_value_policy::reference);
 
     py::class_<ReLU>(m, "ReLU")

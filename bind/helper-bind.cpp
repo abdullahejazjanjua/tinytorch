@@ -7,6 +7,10 @@
 
 namespace py = pybind11;
 
+// for pointers, we have to define a return policy
+// for others, the pybind11 simply sends a copy of the value, so there is no memory management involved
+// py::return_value_policy::reference means python can read, modify with this memory but can't manage its lifecycle
+
 PYBIND11_MODULE(base, m) {
 
     py::class_<Tensor>(m, "Tensor")
@@ -16,12 +20,13 @@ PYBIND11_MODULE(base, m) {
         .def_readwrite("requires_grad", &Tensor::requires_grad)
         .def_readwrite("grad", &Tensor::grad, py::return_value_policy::reference)
 
+        // bind the data as a numpy array (allows compability with all libraries that support numpy arrays)
         .def_property_readonly("data", [](Tensor &t) {
             return py::array_t<float>(
-                {t.size},           // Shape
-                {sizeof(float)},    // Stride
-                t.data,             // Pointer
-                py::cast(&t)        // Lifetime parent
+                {t.size},
+                {sizeof(float)},
+                t.data,             // The numpy array holds the location to data instead of data itself
+                py::cast(&t)        // Ensure that as long as numpy array exists, the tensor t also exists
             );
         })
         .def_property_readonly("shape", [](Tensor &t) {

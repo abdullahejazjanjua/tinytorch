@@ -68,25 +68,33 @@ The output of each layer is kept in GPU VRAM by default to avoid the overhead of
 ## Modules
 
 ### mnist_io
-*   **mnist_io.MNISTData**: Data structure representing the loaded MNIST dataset.
-*   **mnist_io.load_dataset_in_ram**: Loads the entire MNIST dataset into system memory for fast access.
-*   **mnist_io.load_batch_to_tensor**: Populates image and label tensors from a specific batch of the dataset.
-*   **mnist_io.create_indices**: Generates a vector of indices used to track and shuffle data access.
+
+* `mnist_io.load_dataset_in_ram(images_path: str, labels_path: str)`: Loads the entire MNIST dataset into system memory for fast access.
+* `mnist_io.load_batch_to_tensor(data: MNISTData, batch_size: int, indices: list[int], offset: int, images_tensor: Tensor, labels_tensor: Tensor)`: Populates image and label tensors from a specific batch of the dataset.
+* `mnist_io.create_indices(num_samples: int)`: Generates a list of integers used to track and shuffle data access.
+
 
 ### base
-*   **base.tensor_create**: Factory function to instantiate tensors with specified shapes and gradient requirements.
-*   **base.tensor_to_gpu / tensor_to_cpu**: Utilities to migrate tensor data between host and device memory.
 
-###  nn
-*   **nn.Conv2D**: Implements 2D convolution with parameters for channels, kernel size, padding, and weights.
-*   **nn.Linear**: Implements a fully connected layer with input/output features, weights, and optional bias.
-*   **nn.ReLU / nn.GlobalPooling**: Layers for non-linear activation and spatial reduction of feature maps.
-*   **nn.CrossEntropy**: A loss module used for calculating the error during multi-class nclassification.
+* `base.tensor_create(shape: list[int], requires_grad: bool)`: Factory function to instantiate tensors with specified dimensions and gradient tracking.
+* `base.tensor_to_gpu(tensor: Tensor)`: Migrates tensor data from host (CPU) memory to device (GPU) memory.
+* `base.tensor_to_cpu(tensor: Tensor)`: Migrates tensor data from device (GPU) memory back to host (CPU) memory.
+
+
+### nn
+
+* `nn.Conv2D(in_channels: int, out_channels: int, kernel_size: int, padding: int, requires_grad: bool)`: Class constructor for a 2D convolution layer specifying input/output channels and spatial parameters.
+* `nn.Linear(in_features: int, out_features: int, requires_grad: bool, use_bias: bool)`: Class constructor for a fully connected layer with input/output feature sizes and optional bias.
+* `nn.ReLU()`: Class constructor for the Rectified Linear Unit activation module.
+* `nn.GlobalPooling()`: Class constructor for the spatial reduction module (Global Average Pooling).
+* `nn.CrossEntropy()`: Class constructor for the loss module used in multi-class classification tasks.
+
 
 ### optim
-*   **optim.SGD**: Implementation of Stochastic Gradient Descent that takes a list of parameters and a learning rate to perform updates.
-*   **optim.zero_grad**: Method within the SGD class to reset the gradients of all managed tensors.
-*   **optim.backward**: A global function that executes the autograd system's backpropagation logic.
+
+* `optim.SGD(params_list: list[Tensor], lr: float)`: Class constructor for the Stochastic Gradient Descent optimizer, managing a list of parameters.
+* `optim.SGD.zero_grad()`: Method to reset the accumulated gradients of all tensors managed by the optimizer instance to zero.
+* `optim.backward(loss_tensor: Tensor)`: Global function that initiates the autograd engine's topological sort and backpropagation starting from the provided loss tensor.
 
 ## Limitations
 
@@ -130,9 +138,9 @@ logits = lin.forward(x)
 loss = ce.forward(logits, labels)
 
 # Backward and update
-optim_mod.backward(loss)
+optimizer.zero_grad()  # Reset gradients
+optim_mod.backward(loss) # compute gradients for all layer weights
 optimizer.step()       # Must update weights before clearing gradients
-optimizer.zero_grad()  # Reset gradients for the next iteration
 
 # Transfer back to CPU to inspect results
 base.tensor_to_cpu(loss)
@@ -187,7 +195,6 @@ The following numbers come from one pair of runs on the same machine, same data 
 | **Epochs** | 10 |
 | **Test Samples** | 9,984 (Full batches only) |
 
----
 
 ### Architecture Configuration
 
@@ -198,7 +205,6 @@ The network architecture is identical for both frameworks:
 *   **Global Average Pooling:** Collapses spatial dimensions to a vector of width 96.
 *   **MLP Head:** 96 → 128 → 10 layers with ReLU activations.
 
----
 
 ### Data and Evaluation
 
@@ -348,7 +354,7 @@ In this section, the Torch/Tiny ratio is above 1, meaning TinyTorch’s fused ke
 Each kernel and integration was tested prior to moving to the next implementation. We verified correctness by comparing results against PyTorch or by running small examples with analytically verified outcomes. Because these test cases were developed alongside the library and the codebase has evolved significantly across increments, many of them are no longer executable. They are included in the tests/ folder for the sake of completeness.
 
 
-# Autograd (how backward actually runs)
+# Autograd
 
 When a tensor with `requires_grad=1` participates in an operation, the functional code allocates an output tensor. If gradients are needed, it attaches a prev pointer to a Node struct that stores pointers to inputs, optional context for backward, and a generic function pointer to the correct backward implementation.
 
@@ -358,7 +364,9 @@ Calling `optim.backward(Tensor *)` starts from the passed tensor and topological
 
 ### Memory management requirements
 
-Because there is no automatic destructor graph like in PyTorch, Python examples must call `tensor_free(Tensor *)` for every allocated tensor once it leaves scope. Failure to do so will result in VRAM increasing until the process terminates. For this reason, training scripts in this repository free tensors aggressively after each step. This approach was directly inspired by Karpathy's micrograd. More information can be found here: [https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s](https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s)
+Because there is no automatic destructor graph like in PyTorch, Python examples must call `tensor_free(Tensor *)` for every allocated tensor once it leaves scope. Failure to do so will result in VRAM increasing until the process terminates. For this reason, training scripts in this repository free tensors aggressively after each step. 
+
+This approach was directly inspired by Karpathy's micrograd. More information can be found here: [https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s](https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s)
 
 
 # Contribution

@@ -8,6 +8,9 @@
 # MacOs shit
 .DS_Store
 
+# vscode shit
+.vscode
+
 # data
 data
 # Python ignore files

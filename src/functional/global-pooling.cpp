@@ -30,7 +30,7 @@ Tensor* global_pooling_functional_forward(Tensor *input, int ndim, int *expected
         _prev->num_inputs = 1;
 
         _prev->ctx = nullptr; // no ctx needed for backprop
-        _prev->ctx = 0;
+        _prev->num_ctx = 0;
 
         _prev->backward = global_pooling_functional_backward;
 

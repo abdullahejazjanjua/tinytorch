@@ -6,7 +6,7 @@
 
 void inline Malloc(float **f, int size, const char *msg) {
     *f = (float*) malloc(size * sizeof(float));
-    if (f == nullptr) {
+    if (*f == nullptr) {
         std::cerr << "[" << __FILE__ << ":" << __LINE__ << "] Error: " << msg << "\n";
         return;
     }

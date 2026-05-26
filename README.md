@@ -2,6 +2,8 @@
 
 TinyTorch is a minimalist deep learning library we built to better understand how these frameworks actually function under the hood. The internal logic and Python API are heavily inspired by PyTorch, but the codebase is kept minimal and CUDA-native. There is no CPU fallback here because the goal was a lean implementation that focuses entirely on NVIDIA GPUs. We included 2D linear and convolution layers, ReLU activations, a fused softmax-cross-entropy loss for better efficiency, and an SGD optimizer because it was the simplest to implement. The library also features a complete custom autograd system for backpropagation. The code is designed to be easily navigational, so as long as you have a decent understanding of C++ and CUDA, you can read through it and see exactly how everything connects. As a proof of concept, the model currently hits 95% accuracy on the MNIST test set.
 
+A more detailed breakdown of this codebase can be found [here](project-presentation.pdf)
+
 ---
 
 > *"What I cannot create, I do not understand."*

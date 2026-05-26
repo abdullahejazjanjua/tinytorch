@@ -369,6 +369,7 @@ Because there is no automatic destructor graph like in PyTorch, Python examples 
 This approach was directly inspired by Karpathy's micrograd. More information can be found here: [https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s](https://www.youtube.com/watch?v=VMj-3S1tku0&t=4726s)
 
 
-# Contribution
-
-Many optimizations and additional kernels remain to be implemented. Contributions are welcome via pull requests. Ongoing development aims to evolve this project into a robust mini-library.
+# Planned Improvements
+- [ ] Refactor the codebase to use cpp - features more.
+- [ ] Mixed Precision.
+- [ ] Use of tensor cores to speedup Convolution and Linear Layers.
